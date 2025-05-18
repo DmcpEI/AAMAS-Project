@@ -1,5 +1,6 @@
 import logging
 import solara
+from solara import reactive
 from mesa.visualization import SolaraViz, make_space_component, make_plot_component
 from mesa.visualization.utils import update_counter
 #from mesa.visualization.UserParam import SliderInt  # new namespaced params
@@ -8,8 +9,13 @@ from Agents.Hunter import Hunter
 from Agents.Prey import Prey
 from Models.HunterPreyModel import HunterPreyModel
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    force=True,
+    format="%(asctime)s %(levelname)s:%(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
+logging.getLogger("MESA.mesa.model").setLevel(logging.WARNING)
 
 def agent_portrayal(agent):
     if isinstance(agent, Hunter):
@@ -28,12 +34,13 @@ model_params = {
 # Build Solara components
 SpaceGrid = make_space_component(agent_portrayal)  
 PopChart  = make_plot_component(["Hunters", "Preys"])  
-# Optional text element  
+
+
 @solara.component
 def StatusText(model):
     update_counter.get() #update in each timestep
     #get the last collected data
-    data = model.datacollector.get_agent_vars_dataframe().iloc[-1]
+    data = model.datacollector.get_model_vars_dataframe().iloc[-1]
     return solara.Markdown(f"Step {model.steps}: "
                           f"Hunters: {int(data['Hunters'])}\n"
                           f"Preys: {int(data['Preys'])}\n"
@@ -42,7 +49,7 @@ def StatusText(model):
 # Create the page
 page = SolaraViz(
     HunterPreyModel(**{k: v["value"] for k, v in model_params.items() if isinstance(v, dict)}),
-    components=[SpaceGrid, StatusText],
+    components=[ SpaceGrid, StatusText],
     model_params=model_params,
     name="Hunter-Prey Model"    
 )

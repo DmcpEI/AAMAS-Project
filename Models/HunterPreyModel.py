@@ -43,7 +43,7 @@ class HunterPreyModel(Model):
             x = self.random.randrange(width)
             y = self.random.randrange(height)
             self.grid.place_agent(hunter, (x, y))
-            logger.debug(f"Placed Hunter {hunter.unique_id} at {(x, y)}")
+            #logger.debug(f"Placed Hunter {hunter.unique_id} at {(x, y)}")
 
         # Create and place prey agents
         for _ in range(self.num_preys):
@@ -51,7 +51,7 @@ class HunterPreyModel(Model):
             x = self.random.randrange(width)
             y = self.random.randrange(height)
             self.grid.place_agent(prey, (x, y))
-            logger.debug(f"Placed Prey {prey.unique_id} at {(x, y)}")
+            #logger.debug(f"Placed Prey {prey.unique_id} at {(x, y)}")
 
         # Initial data collection
         self.running = True

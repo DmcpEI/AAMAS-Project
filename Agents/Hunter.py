@@ -1,22 +1,20 @@
-from mesa import Agent, Model
 import logging
+from Agents.BaseAgent import BaseAgent
+from Agents.Prey import Prey
 
 logger = logging.getLogger(__name__)
-class Hunter(Agent):
-    """Hunter agent that moves randomly."""
-    def __init__(self, model: Model):
-        super().__init__(model)
 
+class Hunter(BaseAgent):
     def step(self):
-        logger.debug(f"Hunter {self.unique_id} stepping")
-        self.random_move()
-
-    def random_move(self):
-        neighbors = self.model.grid.get_neighborhood(
-            self.pos,
-            moore=True,
-            include_center=False
-        )
-        new_pos = self.random.choice(neighbors)
-        self.model.grid.move_agent(self, new_pos)
-        logger.debug(f"Hunter {self.unique_id} moved to {new_pos}")
+        # move first
+        super().step()
+        # search for a prey in the new cell
+        self.hunt()
+            
+    def hunt(self):
+        cellmates = self.model.grid.get_cell_list_contents([self.pos]) # get all agents in the cell
+        for other in list(cellmates):
+            if isinstance(other, Prey):
+                logger.info(f"Hunter {self.unique_id} ate Prey {other.unique_id} at {self.pos}")
+                # remove prey from the model
+                other.die()
