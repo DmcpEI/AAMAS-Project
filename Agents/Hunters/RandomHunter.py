@@ -4,7 +4,7 @@ from Agents.Prey import Prey
 
 logger = logging.getLogger(__name__)
 
-class Hunter(BaseAgent):
+class RandomHunter(BaseAgent):
     def step(self):
         # move first
         super().step()
@@ -15,6 +15,7 @@ class Hunter(BaseAgent):
         cellmates = self.model.grid.get_cell_list_contents([self.pos]) # get all agents in the cell
         for other in list(cellmates):
             if isinstance(other, Prey):
-                logger.info(f"Hunter {self.unique_id} ate Prey {other.unique_id} at {self.pos}")
+                logger.info(f"RandomHunter {self.unique_id} ate Prey {other.unique_id} at {self.pos}")
                 # remove prey from the model
                 other.die()
+                self.increment_kills()

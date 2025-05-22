@@ -5,9 +5,17 @@ from mesa import Agent, Model
 logger = logging.getLogger(__name__)
 
 class BaseAgent(Agent):
-    """Abstract-ish base with a default step that just moves randomly."""
-    def __init__(self, model: Model):
+    total_kills = 0
+
+    def __init__(self, model: Model, energy=20, move_cost=1):
         super().__init__(model)
+        self.energy = energy
+        self.move_cost = move_cost
+        self.kills = 0
+
+    def increment_kills(self):
+        self.kills += 1
+        type(self).total_kills += 1
 
     def random_move(self):
         neighbors = self.model.grid.get_neighborhood(
@@ -18,5 +26,6 @@ class BaseAgent(Agent):
         logger.debug(f"{self.__class__.__name__} {self.unique_id} moved to {new_pos}")
 
     def step(self):
-        """Default behavior: random walk."""
-        self.random_move()
+        if self.energy > 0:
+            self.energy -= self.move_cost
+            self.random_move()
