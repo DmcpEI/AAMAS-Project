@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 class GreedyHunter(BaseAgent):
     total_kills = 0
     
+
     def __init__(self, model, move_cost=1):
         super().__init__(model, move_cost)
     
@@ -18,6 +19,7 @@ class GreedyHunter(BaseAgent):
 
     def find_closest_prey(self):
         preys = [agent for agent in self.model.agents if isinstance(agent, Prey) or agent.__class__.__name__.endswith("Prey")]
+
         closest_prey = None
         closest_dist = float('inf')
         for prey in preys:
@@ -45,4 +47,6 @@ class GreedyHunter(BaseAgent):
             return
         best_move = self.find_best_move_towards(closest_prey.pos, closest_prey_dist)
         self.model.grid.move_agent(self, best_move)
+
         logger.debug(f"GreedyHunter {self.unique_id} moved to {best_move} towards Prey {closest_prey.unique_id}")
+

@@ -19,8 +19,10 @@ class NashQAgent(BaseAgent):
         self.last_other_action = None
         self.last_reward = 0  # Store previous reward for Q-update
 
+
     def get_state(self, agent_type_filter):
         return super().get_state(agent_type_filter)
+
 
     def get_possible_other_actions(self, other_pos):
         """Get possible actions for other agent. Must be implemented by subclass."""

@@ -5,6 +5,7 @@ from Agents.Preys.Prey import Prey
 logger = logging.getLogger(__name__)
 
 class RandomHunter(BaseAgent):
+
     total_kills = 0
 
     def step(self):
@@ -13,3 +14,4 @@ class RandomHunter(BaseAgent):
         super().step()  # This calls random_move from BaseAgent
         # Then hunt using shared method
         self.hunt()
+

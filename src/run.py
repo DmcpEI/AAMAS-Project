@@ -16,9 +16,11 @@ from mesa.visualization import SolaraViz, make_space_component, make_plot_compon
 from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
+
 from Agents.Hunters.MinimaxHunter import MinimaxHunter
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxPrey import MinimaxPrey
+
 from Agents.Preys.Prey import Prey
 from Models.HunterPreyModel import HunterPreyModel
 from QTableDisplayer import qtable_displayer
@@ -27,6 +29,7 @@ from ChartMetrics import chart_metrics
 # Configuration
 DEFAULT_SIMULATION_PARAMS = {
     "N_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Hunters"},
+
     "N_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Preys"},
     "N_greedy_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Greedy Hunters"},
     "N_nash_q_hunters": {"type": "SliderInt", "value": 1, "min": 0, "max": 10, "step": 1, "label": "Number of Nash Q-learning Hunters"},
@@ -36,6 +39,7 @@ DEFAULT_SIMULATION_PARAMS = {
     "minimax_search_depth": {"type": "SliderInt", "value": 4, "min": 1, "max": 6, "step": 1, "label": "Minimax Search Depth"},
     "width": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Width"},
     "height": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Height"},
+
 }
 
 def setup_logging() -> logging.Logger:
@@ -58,10 +62,12 @@ def get_agent_portrayal_config() -> Dict[str, Dict[str, Any]]:
         RandomHunter: {"color": "#E7E43C", "shape": "circle", "r": 0.5},
         GreedyHunter: {"color": "#FFE66D", "shape": "circle", "r": 0.5},
         NashQHunter: {"color": "#FF5733", "shape": "circle", "r": 0.8},
+
         MinimaxHunter: {"color": "#8B0000", "shape": "square", "r": 0.8},
         NashQPrey: {"color": "#33FF57", "shape": "circle", "r": 0.8},
         MinimaxPrey: {"color": "#008000", "shape": "square", "r": 0.8},
         Prey: {"color": "#006EB8", "shape": "circle", "r": 0.5},
+
     }
 
 def agent_portrayal(agent) -> Dict[str, Any]:
@@ -79,8 +85,10 @@ def agent_portrayal(agent) -> Dict[str, Any]:
     # Check for exact type matches first
     for agent_type, config in portrayal_config.items():
         if isinstance(agent, agent_type):
+
             portrayal = config.copy()
             return portrayal
+
     
     # Default fallback for unknown agent types
     return {"color": "#CCCCCC", "shape": "circle", "r": 0.3}
@@ -90,12 +98,14 @@ def QTableView(model) -> solara.Markdown:
     """Component to display Q-tables for Nash Q-Learning agents."""
     return qtable_displayer.create_qtable_view_component(model)
 
+
 def has_minimax_agents(model) -> bool:
     """Check if the model has any Minimax agents."""
     for agent in getattr(model, 'agents', []):
         if agent.__class__.__name__ in ["MinimaxHunter", "MinimaxPrey"]:
             return True
     return False
+
 
 def StatusText(model) -> solara.Markdown:
     """Component to display current simulation status and metrics."""
@@ -104,6 +114,7 @@ def StatusText(model) -> solara.Markdown:
         qtable_displayer.create_status_component(model)
         
         # Get the last collected data
+
         data = model.datacollector.get_model_vars_dataframe().iloc[-1]        
         
         # Check what types of agents we have
@@ -115,6 +126,7 @@ def StatusText(model) -> solara.Markdown:
         if has_nash_q or has_minimax:
             # Map metrics to display names, filtered by agent type
             nash_q_metrics = {
+
                 "NashQHunters": "NashQ Hunters",
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
@@ -122,6 +134,7 @@ def StatusText(model) -> solara.Markdown:
                 "AvgNashQPreyReward": "Avg NashQ Prey Reward"
             }
             
+
             minimax_metrics = {
                 "MinimaxHunters": "Minimax Hunters",
                 "MinimaxPreys": "Minimax Preys",
@@ -155,6 +168,7 @@ def StatusText(model) -> solara.Markdown:
                 if additional_info:
                     additional_info += "\n"
                 additional_info += "*Minimax agents use tree search with alpha-beta pruning.*"
+
             
             status_text = f"""## Simulation Status
 
@@ -162,10 +176,12 @@ def StatusText(model) -> solara.Markdown:
 
 {chr(10).join(status_lines)}
 
+
 {additional_info}
             """
         else:
             # Show basic simulation info without advanced agent specific metrics
+
             status_text = f"""## Simulation Status
 
 **Step {model.steps}:**
@@ -179,6 +195,7 @@ def StatusText(model) -> solara.Markdown:
     except Exception as e:
         logger.error(f"Error generating status text: {e}")
         return solara.Markdown(f"**Error**: Unable to display status - {e}")
+
 
 def KillNotification(model) -> solara.VBox:
     """Component to display kill notifications as popup-like alerts."""
@@ -223,6 +240,7 @@ def KillNotification(model) -> solara.VBox:
         solara.Markdown(notification_text, style=notification_style)
     ])
 
+
 # Main simulation initialization
 def create_visualization_components():
     """
@@ -263,7 +281,9 @@ def create_simulation_page() -> SolaraViz:
     # Create and configure the page
     page = SolaraViz(
         model,
+
         components=[KillNotification, SpaceGrid, StatusText, PopChart, QTableView],
+
         model_params=DEFAULT_SIMULATION_PARAMS,
         name="Hunter-Prey Nash Q-Learning Simulation"
     )

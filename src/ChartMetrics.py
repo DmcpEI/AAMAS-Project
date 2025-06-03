@@ -17,7 +17,9 @@ class ChartMetrics:
     
     This class centralizes the definition and management of metrics that are
     displayed in the simulation charts, making it easier to add, remove, or
+
     modify metrics without changing the main simulation code.    """
+
     
     def __init__(self):
         """Initialize the ChartMetrics with default metrics."""
@@ -26,12 +28,14 @@ class ChartMetrics:
             "NashQPreys", 
             "NashQHunterKills",
             "AvgNashQHunterReward",
+
             "AvgNashQPreyReward",
             "MinimaxHunters",
             "MinimaxPreys",
             "MinimaxHunterKills", 
             "AvgMinimaxHunterReward",
             "AvgMinimaxPreyReward"
+
         ]
         logger.info(f"ChartMetrics initialized with {len(self._metrics)} metrics")
     
@@ -102,6 +106,7 @@ class ChartMetrics:
         ]
         return nash_q_metrics
     
+
     def get_minimax_metrics(self) -> List[str]:
         """
         Get only the Minimax-related metrics.
@@ -115,6 +120,7 @@ class ChartMetrics:
         ]
         return minimax_metrics
     
+
     def get_hunter_metrics(self) -> List[str]:
         """
         Get only the hunter-related metrics.
@@ -165,17 +171,21 @@ class ChartMetrics:
             "total_metrics": len(self._metrics),
             "all_metrics": self.metrics,
             "nash_q_metrics": self.get_nash_q_metrics(),
+
             "minimax_metrics": self.get_minimax_metrics(),
+
             "hunter_metrics": self.get_hunter_metrics(),
             "prey_metrics": self.get_prey_metrics(),
             "reward_metrics": self.get_reward_metrics(),
             "categories": {
                 "nash_q": len(self.get_nash_q_metrics()),
+
                 "minimax": len(self.get_minimax_metrics()),
                 "hunter": len(self.get_hunter_metrics()),
                 "prey": len(self.get_prey_metrics()),
                 "reward": len(self.get_reward_metrics())
             }        }
+
     
     def reset_to_default(self) -> None:
         """Reset metrics to the default configuration."""
@@ -184,12 +194,14 @@ class ChartMetrics:
             "NashQPreys", 
             "NashQHunterKills",
             "AvgNashQHunterReward",
+
             "AvgNashQPreyReward",
             "MinimaxHunters",
             "MinimaxPreys",
             "MinimaxHunterKills", 
             "AvgMinimaxHunterReward",
             "AvgMinimaxPreyReward"
+
         ]
         logger.info("ChartMetrics reset to default configuration")
     

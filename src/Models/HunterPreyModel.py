@@ -5,10 +5,12 @@ from mesa.datacollection import DataCollector
 from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
+
 from Agents.Hunters.MinimaxHunter import MinimaxHunter
 from Agents.Preys.Prey import Prey
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxPrey import MinimaxPrey
+
 from typing import Optional
 import logging
 import numpy as np
@@ -20,10 +22,12 @@ class HunterPreyModel(Model):
     A model with dynamic numbers of hunters and preys on a non-toroidal grid.
     Uses the AgentSet API for scheduling.
     """
+
     def __init__(
         self,
         N_hunters: int = 10,
         N_greedy_hunters: int = 0,        N_nash_q_hunters: int = 0,
+
         N_minimax_hunters: int = 0,
         N_preys: int = 50,
         N_nash_q_preys: int = 0,
@@ -36,11 +40,13 @@ class HunterPreyModel(Model):
         super().__init__(seed=seed)        
         logger.info(
             f"Initializing model with {N_hunters} hunters, {N_greedy_hunters} greedy hunters, {N_nash_q_hunters} Nash Q-learning hunters, {N_minimax_hunters} minimax hunters, {N_preys} preys, {N_nash_q_preys} Nash Q-learning preys, and {N_minimax_preys} minimax preys "
+
             f"on a {width}x{height} grid"
         )
         self.num_hunters = N_hunters
         self.num_greedy_hunters = N_greedy_hunters
         self.num_nash_q_hunters = N_nash_q_hunters
+
         self.num_minimax_hunters = N_minimax_hunters
         self.num_preys = N_preys
         self.num_nash_q_preys = N_nash_q_preys
@@ -58,18 +64,22 @@ class HunterPreyModel(Model):
         GreedyHunter.total_kills = 0
         NashQHunter.total_kills = 0
         MinimaxHunter.total_kills = 0        # Data collector for live counts
+
         self.datacollector = DataCollector({
             "Hunters": lambda m: m.count_type(RandomHunter),
             "GreedyHunters": lambda m: m.count_type(GreedyHunter),
             "NashQHunters": lambda m: m.count_type(NashQHunter),
+
             "MinimaxHunters": lambda m: m.count_type(MinimaxHunter),
             "Preys": lambda m: m.count_type(Prey),
             "NashQPreys": lambda m: m.count_type(NashQPrey),
             "MinimaxPreys": lambda m: m.count_type(MinimaxPrey),
+
             "AvgEnergy": self.avg_energy,
             "RandomHunterKills": self.get_random_hunter_kills,
             "GreedyHunterKills": self.get_greedy_hunter_kills,
             "NashQHunterKills": self.get_nash_q_hunter_kills,
+
             "MinimaxHunterKills": self.get_minimax_hunter_kills,
             "AvgHunterReward": self.avg_hunter_reward,
             "AvgNashQHunterReward": self.avg_nash_q_hunter_reward,
@@ -88,11 +98,13 @@ class HunterPreyModel(Model):
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
                 self.grid.place_agent(hunter, (x, y))
+
             #logger.debug(f"Placed RandomHunter {hunter.unique_id} at {(x, y)}")
 
         # Create and place greedy hunter agents
         for _ in range(self.num_greedy_hunters):
             ghunter = GreedyHunter(self)
+
             pos = self._get_collision_free_position()
             if pos:
                 self.grid.place_agent(ghunter, pos)
@@ -162,9 +174,11 @@ class HunterPreyModel(Model):
                 self.grid.place_agent(miprey, (x, y))
             #logger.debug(f"Placed MinimaxPrey {miprey.unique_id} at {(x, y)}")
         
+
         # Initial data collection
         self.running = True
         self.datacollector.collect(self)
+
 
     def _get_collision_free_position(self):
         """Get a random position that doesn't have other agents."""
@@ -233,6 +247,7 @@ class HunterPreyModel(Model):
         # They remain set until the NEXT step so the frontend can display the notification
         # The actual hunter teleportation is delayed until the next step
 
+
     def count_type(self, agent_type: type) -> int:
         """Helper to count agents of a given type."""
         count = sum(isinstance(agent, agent_type) for agent in self.agents)
@@ -252,6 +267,7 @@ class HunterPreyModel(Model):
         return RandomHunter.total_kills
 
     def get_greedy_hunter_kills(self):
+
         return GreedyHunter.total_kills
     
     def get_nash_q_hunter_kills(self):
@@ -294,4 +310,5 @@ class HunterPreyModel(Model):
             'position': hunter_agent.pos,
             'step': self.steps
         }
+
 

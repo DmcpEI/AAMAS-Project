@@ -16,6 +16,7 @@ class BaseAgent(Agent):
         self.kills += 1
         type(self).total_kills += 1
 
+
     def get_collision_free_position(self):
         """Get a random empty position that doesn't have other agents."""
         empty_cells = [cell for cell in self.model.grid.empties]
@@ -131,6 +132,7 @@ class BaseAgent(Agent):
         logger.debug(f"{self.__class__.__name__} {self.unique_id} moved to {new_pos}")
 
     def step(self):
+
         self.random_move()
 
     def get_state(self, agent_type_filter):
@@ -148,3 +150,4 @@ class BaseAgent(Agent):
             'agent_type': self.__class__.__name__,
             'position': self.pos
         }
+

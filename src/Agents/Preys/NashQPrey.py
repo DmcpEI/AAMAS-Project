@@ -22,10 +22,12 @@ class NashQPrey(NashQAgent):
     def get_other_positions(self, state):
         return state[1]
         
+
     def get_other_agent_q_table(self):
         """Get the Q-table of a NashQHunter for Nash equilibrium computation."""
         for agent in self.model.agents:
             if agent.__class__.__name__ == "NashQHunter":
+
                 return getattr(agent, 'Q', {})
         return {}
     
@@ -38,10 +40,12 @@ class NashQPrey(NashQAgent):
         if self.last_state is not None and self.last_action is not None:
             current_state = self.get_state()
             new_q = self.update_q_nash(self.last_state, self.last_action, self.last_reward, current_state, self.last_other_action)
+
               # Debug print with readable format
             state_str = f"[pos={self.last_state[0]}, hunters={list(self.last_state[1])}]"
             action_dir = self.pos_to_direction(self.last_state[0], self.last_action)
             hunter_action_dir = self.pos_to_direction(self.last_state[1][0] if self.last_state[1] else None, self.last_other_action) if self.last_other_action else "None"
+
             print(f"Prey {self.unique_id} Nash Q-update: state={state_str}, action={action_dir}, hunter_action={hunter_action_dir} -> Q={new_q:.3f} (reward={self.last_reward})")
         # --- End Nash Q-table update ---
         
@@ -53,38 +57,46 @@ class NashQPrey(NashQAgent):
         # Debug: Print state information with readable format
         state_str = f"[pos={state[0]}, hunters={list(state[1])}]"
         print(f"Prey {self.unique_id} current state: {state_str}")
-        
+
         if hunter_positions:
             for agent in self.model.agents:
                 if hasattr(agent, 'step') and agent.__class__.__name__.endswith("Hunter"):
                     if hasattr(agent, 'last_action'):
                         hunter_action = agent.last_action
+
                         hunter_action_dir = self.pos_to_direction(hunter_positions[0] if hunter_positions else None, hunter_action)
+
                         print(f"Prey {self.unique_id} found hunter action: {hunter_action_dir}")
                     break
         
         action = self.select_action(state, hunter_action)
         self.model.grid.move_agent(self, action)
+
         
         # Calculate survival reward
         # Zero-sum reward: +1 for surviving a step (matches hunter's -1 step penalty)
         reward = 1  # survived this step
+
         
         # Track reward for visualization
         self._step_reward = reward
         
+
         # Store state and action for next update
+
         self.last_state = state
         self.last_action = action
         self.last_other_action = hunter_action
         self.last_reward = reward
           # Debug: Print what we're storing with readable format
         store_state_str = f"[pos={state[0]}, hunters={list(state[1])}]"
+
         action_dir = self.pos_to_direction(state[0], action)
         hunter_action_dir = self.pos_to_direction(hunter_positions[0] if hunter_positions else None, hunter_action) if hunter_action else "None"
         print(f"Prey {self.unique_id} storing: state={store_state_str}, action={action_dir}, hunter_action={hunter_action_dir}")
         
         print(f"Prey {self.unique_id} step: reward={reward}")
+
 
     def die(self):
         # Apply penalty for being caught before teleporting
@@ -97,6 +109,7 @@ class NashQPrey(NashQAgent):
             # No next state, so future reward is 0 (terminal state)
             new_q = old_q + self.alpha * (reward - old_q)
             self.Q[(self.last_state, self.last_action, key_other_action)] = new_q
+
               # Debug print with readable format
             state_str = f"[pos={self.last_state[0]}, hunters={list(self.last_state[1])}]"
             action_dir = self.pos_to_direction(self.last_state[0], self.last_action)
@@ -106,6 +119,7 @@ class NashQPrey(NashQAgent):
         # Teleport to a collision-free random empty cell
         new_pos = self.get_collision_free_position()
         if new_pos:
+
             self.model.grid.move_agent(self, new_pos)
         # Optionally, reset any other state if needed (not Q-table)
         # Do NOT remove the agent from the model
