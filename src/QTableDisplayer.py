@@ -99,42 +99,68 @@ class QTableDisplayer:
         except (TypeError, IndexError) as e:
             self.logger.warning(f"Error converting position to direction: {e}")
             return str(action_pos)
-    
-    def format_state_string(self, state: tuple) -> str:
-        """Format state tuple for readable display."""
+
+    def format_state_string(self, state: tuple, agent_type: str = None) -> str:
+        """
+        Format state tuple for readable display.
+        
+        Args:
+            state: State tuple (pos, others)
+            agent_type: Type of agent ("NashQHunter" or "NashQPrey")
+            
+        Returns:
+            Formatted state string
+        """
         if len(state) >= 2:
-            return f"[pos={state[0]}, others={list(state[1])}]"
+            if agent_type == "NashQHunter":
+                return f"[Me={state[0]}, prey={list(state[1])}]"
+            elif agent_type == "NashQPrey":
+                return f"[Me={state[0]}, hunter={list(state[1])}]"
+            else:
+                return f"[pos={state[0]}, others={list(state[1])}]"
         return str(state)
-    
-    def format_q_entry(self, k: tuple, v: float) -> str:
+    def format_q_entry(self, k: tuple, v: float, agent_type: str = None) -> str:
+
         """
         Format a Q-table entry for display.
         
         Args:
             k: Q-table key (state, action, other_action)
             v: Q-value
+
+            agent_type: Type of agent ("NashQHunter" or "NashQPrey")
+
             
         Returns:
             Formatted string representation
         """
         try:
             state, action, other_action = k
-            state_str = self.format_state_string(state)
+
+            state_str = self.format_state_string(state, agent_type)
             action_dir = self.pos_to_direction(state[0], action)
+            
+
             other_action_dir = self.pos_to_direction(
                 state[1][0] if state[1] else None, 
                 other_action
             ) if other_action else "None"
             
-            return f"State: {state_str}, Action: {action_dir}, OtherAction: {other_action_dir} → Q={v:.3f}"
+
+            # Customize the output based on agent type
+            if agent_type == "NashQHunter":
+                return f"State: {state_str}, Action: {action_dir}, PreyAction: {other_action_dir} → Q={v:.3f}"
+            elif agent_type == "NashQPrey":
+                return f"State: {state_str}, Action: {action_dir}, HunterAction: {other_action_dir} → Q={v:.3f}"
+            else:
+                return f"State: {state_str}, Action: {action_dir}, OtherAction: {other_action_dir} → Q={v:.3f}"
         except Exception as e:
             self.logger.error(f"Error formatting Q-table entry {k}: {e}")
             return f"Error formatting entry: {k} → {v:.3f}"
-    
-    # =====================================
+      # =====================================
     # TERMINAL DISPLAY METHODS
     # =====================================
-    
+
     def print_q_table_section(self, model, agent_class_name: str, display_name: str, max_entries: int = 10) -> None:
         """
         Print Q-table section to terminal for a specific agent type.
@@ -152,20 +178,24 @@ class QTableDisplayer:
             print(f"No {agent_class_name} found or Q-table empty")
             return
         
-        stats = self.get_q_table_stats(q_table)        
+
+        stats = self.get_q_table_stats(q_table)
         print(f"Total entries: {stats['entries']}")
         print(f"Avg Q-value: {stats['avg_value']:.3f}")
-        print(f"🔝 Max Q-value: {stats['max_value']:.3f}")
-        print(f"🔻 Min Q-value: {stats['min_value']:.3f}")
+        print(f"Max Q-value: {stats['max_value']:.3f}")
+        print(f"Min Q-value: {stats['min_value']:.3f}")
+
         print()
             
         count = 0
         for k, v in list(q_table.items())[-max_entries:]:
             try:
-                print(f"  {self.format_q_entry(k, v)}")
+
+                print(f"  {self.format_q_entry(k, v, agent_class_name)}")
                 count += 1
-            except Exception as e:
-                print(f"  Error formatting Q-table entry {k}: {e}")
+            except Exception as e:                print(f"  Error formatting Q-table entry {k}: {e}")
+                
+
     def has_nash_q_agents(self, model) -> bool:
         """Check if the model has any Nash Q-learning agents."""
         for agent in getattr(model, 'agents', []):
@@ -190,7 +220,7 @@ class QTableDisplayer:
     # =====================================
     # FRONTEND DISPLAY METHODS
     # =====================================
-    
+
     def generate_q_table_markdown(self, q_table: Optional[Dict], agent_type: str, max_entries: int = 10) -> str:
         """
         Generate markdown representation of Q-table for frontend display.
@@ -219,12 +249,17 @@ class QTableDisplayer:
 ```
 """
         
-        # Show last N entries
+
+        # Extract agent class name from display name
+        agent_class_name = "NashQHunter" if "Hunter" in agent_type else "NashQPrey"
+          # Show last N entries
         for k, v in list(q_table.items())[-max_entries:]:
-            formatted_entry = self.format_q_entry(k, v)
+            formatted_entry = self.format_q_entry(k, v, agent_class_name)
             markdown += f"{formatted_entry}\n"
         markdown += "```\n\n"
         return markdown
+        
+
     def create_qtable_view_component(self, model) -> solara.Markdown:
         """
         Create Q-table view component for frontend display.
@@ -249,7 +284,9 @@ class QTableDisplayer:
             return solara.Markdown(hunter_md + prey_md)
         except Exception as e:
             self.logger.error(f"Error creating Q-table view: {e}")
-            return solara.Markdown("")    
+
+            return solara.Markdown("")
+
     def create_status_component(self, model) -> None:
         """
         Print Q-tables to terminal (only if Nash Q agents exist).
@@ -261,7 +298,7 @@ class QTableDisplayer:
     # =====================================
     # CONVENIENCE METHODS
     # =====================================
-    
+
     def get_combined_q_table_display(self, model) -> str:
         """Get combined Q-table display for both agent types."""
         hunter_q_table = self.get_agent_q_table(model, "NashQHunter")

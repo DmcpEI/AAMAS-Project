@@ -7,23 +7,19 @@ logger = logging.getLogger(__name__)
 class GreedyHunter(BaseAgent):
     total_kills = 0
     
-    def __init__(self, unique_id, model, pos):
-        super().__init__(unique_id, model, pos)
+
+    def __init__(self, model, move_cost=1):
+        super().__init__(model, move_cost)
     
     def step(self):
-        if self.energy > 0:
-            self.energy -= self.move_cost
-            self.greedy_move()
-            self.hunt()
-
-    def manhattan_distance(self, pos1, pos2):
-        """Calculate Manhattan distance between two positions on a non-toroidal grid"""
-        dx = abs(pos1[0] - pos2[0])
-        dy = abs(pos1[1] - pos2[1])
-        return dx + dy
+        """Single step execution: move and hunt."""
+        self.greedy_move()        
+        # Hunt after moving using shared method
+        self.hunt()
 
     def find_closest_prey(self):
-        preys = [agent for agent in self.model.agents if isinstance(agent, Prey)]
+        preys = [agent for agent in self.model.agents if isinstance(agent, Prey) or agent.__class__.__name__.endswith("Prey")]
+
         closest_prey = None
         closest_dist = float('inf')
         for prey in preys:
@@ -51,12 +47,6 @@ class GreedyHunter(BaseAgent):
             return
         best_move = self.find_best_move_towards(closest_prey.pos, closest_prey_dist)
         self.model.grid.move_agent(self, best_move)
+
         logger.debug(f"GreedyHunter {self.unique_id} moved to {best_move} towards Prey {closest_prey.unique_id}")
 
-    def hunt(self):
-        cellmates = self.model.grid.get_cell_list_contents([self.pos])
-        for other in list(cellmates):
-            if isinstance(other, Prey):
-                logger.info(f"GreedyHunter {self.unique_id} ate Prey {other.unique_id} at {self.pos}")
-                other.die()
-                self.increment_kills()
