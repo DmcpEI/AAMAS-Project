@@ -19,19 +19,19 @@ class MinimaxPrey(MinimaxAgent):
     Prey agent using minimax algorithm.
     Minimizes capture probability while maximizing distance from hunters.
     """
-    
     def __init__(self, model, search_depth=3):
         super().__init__(model, search_depth)
         self.move_cost = 1  # Cost for each move
+        self._is_dead = False  # Flag to prevent movement after death
+        self.exploration_rate = 0.15  # 15% chance of random exploration to break patterns
         
     def get_state(self):
-        """Get current state: (my_position, hunter_positions)"""
-        # Get all hunter positions
-        hunter_positions = tuple(sorted([
+        filtered_positions = tuple(sorted([
             agent.pos for agent in self.model.agents
             if hasattr(agent, 'step') and agent.__class__.__name__.endswith("Hunter")
         ]))
-        return (self.pos, hunter_positions)
+        return (self.pos, filtered_positions)
+        
     def evaluate_state(self, state):
         """
         Evaluate state from prey's perspective (minimizing player).
@@ -112,16 +112,25 @@ class MinimaxPrey(MinimaxAgent):
         # For prey, we start as minimizing player
         eval_score, best_action = self.minimax(state, self.search_depth, False)
         
-        # Debug output
-        logger.debug(f"MinimaxPrey {self.unique_id}: Minimax search completed")
+        # Debug output        logger.debug(f"MinimaxPrey {self.unique_id}: Minimax search completed")
         logger.debug(f"  Nodes searched: {self.nodes_searched}")
         logger.debug(f"  Best action: {best_action}")
         logger.debug(f"  Evaluation: {eval_score:.3f}")
-        
         return best_action if best_action else self._get_fallback_action()
-    
+
+    def get_best_action(self):
+        """Get the best action for the agent"""
+        state = self.get_state()
+        # For prey, we start as minimizing player
+        _, best_action = self.minimax(state, self.search_depth, False)
+        return best_action
+
     def step(self):
-        """Execute one step of the prey agent."""
+        """Single step execution: evaluate and move."""
+        if self._is_dead:
+            logger.debug(f"MinimaxPrey {self.unique_id} skipping step (dead)")
+            return
+            
         logger.debug(f"MinimaxPrey {self.unique_id} step started at {self.pos}")
         
         # Get current state
@@ -129,7 +138,8 @@ class MinimaxPrey(MinimaxAgent):
         
         # Select best action using minimax
         best_action = self.select_action(current_state)
-          # Move to the selected position
+        
+        # Move to the selected position
         if best_action and best_action != self.pos:
             self.model.grid.move_agent(self, best_action)
             logger.info(f"MinimaxPrey {self.unique_id} moved from {current_state[0]} to {best_action}")
@@ -137,39 +147,17 @@ class MinimaxPrey(MinimaxAgent):
             logger.debug(f"MinimaxPrey {self.unique_id} stayed at {self.pos}")
     
     def die(self):
-        """Handle prey death by teleporting to collision-free position."""
-        new_pos = self._get_collision_free_position()
-        if new_pos:
-            self.model.grid.move_agent(self, new_pos)
-            logger.info(f"MinimaxPrey {self.unique_id} respawned at {new_pos}")
-    
-    def _get_collision_free_position(self):
-        """Get a random empty position that doesn't have other agents."""
-        empty_cells = [cell for cell in self.model.grid.empties]
-        if not empty_cells:
-            return None
-        
-        # Filter out cells that already have agents
-        available_cells = []
-        for cell in empty_cells:
-            cell_contents = self.model.grid.get_cell_list_contents([cell])
-            # Only consider truly empty cells (no agents)
-            if not cell_contents:
-                available_cells.append(cell)
-        
-        if available_cells:
-            return self.random.choice(available_cells)
-        else:
-            # Fallback to any empty cell if no completely empty cells available
-            return self.random.choice(empty_cells) if empty_cells else None
+        """Handle prey death by scheduling respawn for next step."""
+        # Mark as dead to prevent further movement this step        self._is_dead = True
+        # Add to pending respawns instead of immediately respawning
+        self.model.pending_prey_respawns.append(self)
+        logger.info(f"MinimaxPrey {self.unique_id} scheduled for respawn next step")
     
     def get_metrics(self):
-        """Get performance metrics for this prey."""
-        return {
-            'agent_id': self.unique_id,
-            'agent_type': 'MinimaxPrey',
-            'position': self.pos,
+        """Extend performance metrics for MinimaxPrey."""
+        metrics = super().get_metrics()
+        metrics.update({
             'search_depth': self.search_depth,
-            'last_nodes_searched': getattr(self, 'nodes_searched', 0),
-            'survival_time': self.model.schedule.steps  # How long this prey has survived
-        }
+            'is_dead': self._is_dead
+        })
+        return metrics

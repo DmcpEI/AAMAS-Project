@@ -31,12 +31,7 @@ class MinimaxAgent(BaseAgent, ABC):
         self.exploration_rate = 0.0  # 0% chance of random exploration
         self.previous_moves = []  # Track recent moves to avoid loops
         self.max_history = 5  # Remember last 5 moves
-        
-    def get_possible_actions(self, pos=None):
-        """Get possible actions from a given position (or current position)"""
-        if pos is None:
-            pos = self.pos
-        return self.model.grid.get_neighborhood(pos, moore=False, include_center=False)
+      
         
     def is_terminal_state(self, state):
         """Check if state is terminal (game over)"""
@@ -44,10 +39,7 @@ class MinimaxAgent(BaseAgent, ABC):
         
         # Terminal if my position overlaps with any other agent
         return my_pos in other_positions
-        
-    def manhattan_distance(self, pos1, pos2):
-        """Calculate Manhattan distance between two positions."""
-        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+      
     
     def minimax(self, state, depth, is_maximizing_player, alpha=float('-inf'), beta=float('inf')):
         """
@@ -146,7 +138,10 @@ class MinimaxAgent(BaseAgent, ABC):
         """Select best action using minimax algorithm"""
         self.nodes_searched = 0  # Reset counter
         
-        eval_score, best_action = self.minimax(state, self.search_depth, True)
+        # For prey, start as minimizing player
+        is_maximizing = not self.__class__.__name__.endswith("Prey")
+        
+        eval_score, best_action = self.minimax(state, self.search_depth, is_maximizing)
         
         # Debug output
         agent_type = self.__class__.__name__

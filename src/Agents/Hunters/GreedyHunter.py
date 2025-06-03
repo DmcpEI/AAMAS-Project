@@ -7,32 +7,17 @@ logger = logging.getLogger(__name__)
 class GreedyHunter(BaseAgent):
     total_kills = 0
     
-    def __init__(self, unique_id, model, pos):
-        super().__init__(unique_id, model, pos)
+    def __init__(self, model, move_cost=1):
+        super().__init__(model, move_cost)
     
-    def move_phase(self):
-        """Phase 1: Movement only."""
-        if self.energy > 0:
-            self.energy -= self.move_cost
-            self.greedy_move()
-
-    def action_phase(self):
-        """Phase 2: Actions only - hunting."""
+    def step(self):
+        """Single step execution: move and hunt."""
+        self.greedy_move()        
+        # Hunt after moving using shared method
         self.hunt()
 
-    def step(self):
-        """Legacy step method - calls both phases for backward compatibility."""
-        self.move_phase()
-        self.action_phase()
-
-    def manhattan_distance(self, pos1, pos2):
-        """Calculate Manhattan distance between two positions on a non-toroidal grid"""
-        dx = abs(pos1[0] - pos2[0])
-        dy = abs(pos1[1] - pos2[1])
-        return dx + dy
-
     def find_closest_prey(self):
-        preys = [agent for agent in self.model.agents if isinstance(agent, Prey)]
+        preys = [agent for agent in self.model.agents if isinstance(agent, Prey) or agent.__class__.__name__.endswith("Prey")]
         closest_prey = None
         closest_dist = float('inf')
         for prey in preys:
@@ -61,16 +46,3 @@ class GreedyHunter(BaseAgent):
         best_move = self.find_best_move_towards(closest_prey.pos, closest_prey_dist)
         self.model.grid.move_agent(self, best_move)
         logger.debug(f"GreedyHunter {self.unique_id} moved to {best_move} towards Prey {closest_prey.unique_id}")
-
-    def hunt(self):
-        cellmates = self.model.grid.get_cell_list_contents([self.pos])
-        for other in list(cellmates):
-            if isinstance(other, Prey):
-                logger.info(f"GreedyHunter {self.unique_id} ate Prey {other.unique_id} at {self.pos}")
-                # Register kill for visualization
-                self.model.register_kill(self, other)
-                other.die()
-                self.increment_kills()
-                # Schedule teleportation next step
-                self.model.pending_hunter_teleports.append(self)
-                break

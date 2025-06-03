@@ -47,11 +47,11 @@ class HunterPreyModel(Model):
         self.num_minimax_preys = N_minimax_preys
         self.minimax_search_depth = minimax_search_depth        
         self.grid = MultiGrid(width, height, torus=False)
-        
-        # Kill notification system
+          # Kill notification system
         self.kill_occurred_this_step = False
         self.kill_info = None  # Will store {'hunter_id': X, 'prey_id': Y, 'hunter_type': 'type', 'position': (x,y)}
         self.pending_hunter_teleports = []  # List of hunters waiting to teleport next step
+        self.pending_prey_respawns = []  # List of prey waiting to respawn next step
         
         # Reset kill counters
         RandomHunter.total_kills = 0
@@ -181,7 +181,7 @@ class HunterPreyModel(Model):
             return self.random.choice(available_positions)
         else:
             # Fallback to any random position if no completely empty cells available
-            return None    
+            return None
     def step(self) -> None:
         """Advance the model by one step."""
         logger.debug(f"Model step {self.steps}")
@@ -195,22 +195,43 @@ class HunterPreyModel(Model):
             # Clear pending list
             self.pending_hunter_teleports.clear()
 
-        # Reset kill tracking for this step
+        # Process pending prey respawns from previous kills
+        if self.pending_prey_respawns:
+            for prey in list(self.pending_prey_respawns):
+                new_pos = self._get_collision_free_position()
+                if new_pos:
+                    self.grid.move_agent(prey, new_pos)
+                    # Reset death flag if it exists (for MinimaxPrey)
+                    if hasattr(prey, '_is_dead'):
+                        prey._is_dead = False
+                    logger.info(f"{prey.__class__.__name__} {prey.unique_id} respawned at {new_pos}")
+            # Clear pending list
+            self.pending_prey_respawns.clear()
+
+        # Reset kill tracking from PREVIOUS step (but keep current step tracking)
         self.kill_occurred_this_step = False
         self.kill_info = None
 
-        # Use regular Mesa agent activation but with explicit list to avoid
-        # concurrent modification issues during agent removal (when prey dies)
+        # Single-step execution with random activation order
         agents_list = list(self.agents)
         self.random.shuffle(agents_list)  # Random activation order
         
         for agent in agents_list:
             # Check if agent still exists (not removed during this step)
             if agent in self.agents:
+                # Check if agent is a prey that was killed this step
+                if hasattr(agent, '_is_dead') and agent._is_dead:
+                    logger.debug(f"Skipping step for dead prey {agent.unique_id}")
+                    continue
+                    
                 agent.step()
         
         # Collect metrics
         self.datacollector.collect(self)
+        
+        # NOTE: Kill tracking variables (kill_occurred_this_step, kill_info) are NOT reset here
+        # They remain set until the NEXT step so the frontend can display the notification
+        # The actual hunter teleportation is delayed until the next step
 
     def count_type(self, agent_type: type) -> int:
         """Helper to count agents of a given type."""
@@ -274,4 +295,3 @@ class HunterPreyModel(Model):
             'step': self.steps
         }
 
-    
