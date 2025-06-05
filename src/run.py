@@ -282,7 +282,7 @@ def create_simulation_page() -> SolaraViz:
     page = SolaraViz(
         model,
 
-        components=[KillNotification, SpaceGrid, StatusText, PopChart, QTableView],
+        components=[ SpaceGrid, StatusText, PopChart, KillNotification,  QTableView],
 
         model_params=DEFAULT_SIMULATION_PARAMS,
         name="Hunter-Prey Nash Q-Learning Simulation"

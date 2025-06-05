@@ -2,10 +2,18 @@ import numpy as np
 from Agents.NashQAgent import NashQAgent
 # Removed circular import: from Agents.Hunters.NashQHunter import NashQHunter
 
-class NashQPrey(NashQAgent):    
-    def __init__(self, model, alpha=0.1, gamma=0.9, epsilon=0.1, move_cost=1):
+class NashQPrey(NashQAgent):
+    def __init__(self, model, alpha=0.1, gamma=0.9, epsilon=0.3, move_cost=1):
         super().__init__(model, alpha, gamma, epsilon, move_cost)
         self.Q = {}  # Q-table: (state, prey_action, hunter_action) -> value
+        self.epsilon_min = 0.1  # Higher minimum exploration for prey
+        self.epsilon_decay = 0.998  # Slower decay to maintain exploration longer
+        
+        # Re-initialize enhanced exploration parameters (may have been overwritten)
+        self.loop_detection_threshold = 3
+        self.max_history = 15
+        self.corner_bias_counter = 0
+        self.exploration_boost_steps = 0
         
     def get_state(self):
         """Get current state: (my_position, hunter_positions)"""
@@ -32,7 +40,33 @@ class NashQPrey(NashQAgent):
         return {}
     
     def step(self):
-        """Main step method that handles movement, survival reward, and Q-learning."""
+        """Step method - only called for non-Nash Q phases or fallback."""
+        # This should not be called when using the synchronized Nash Q system
+        # But kept for compatibility with other agent types
+        if hasattr(self.model, 'nash_q_phase') and self.model.nash_q_phase == "execution":
+            # During execution phase, agents are moved by the model
+            return        
+        elif not hasattr(self.model, 'nash_q_phase'):
+            # Fallback for when Nash Q synchronization is not available
+            self._fallback_step()
+
+    def observe_state(self):
+        """Observe current state at the beginning of the step - PHASE 1."""
+        self.observed_state = self.get_state()
+        # Store the observed state for later use in learning phase
+        return self.observed_state
+
+    def choose_nash_q_action(self):
+        """Choose action during Nash Q-Learning Phase 1: Action Selection."""
+        if not hasattr(self, 'observed_state'):
+            self.observed_state = self.get_state()
+        
+        # Use Nash Q-Learning action selection
+        action = self.select_action(self.observed_state)
+        return action
+
+    def _fallback_step(self):
+        """Fallback step method for compatibility."""
         # Debug: Print current state
         print(f"Prey {self.unique_id} step: last_state={self.last_state is not None}, last_action={self.last_action is not None}, last_other_action={self.last_other_action is not None}")
         
@@ -41,7 +75,7 @@ class NashQPrey(NashQAgent):
             current_state = self.get_state()
             new_q = self.update_q_nash(self.last_state, self.last_action, self.last_reward, current_state, self.last_other_action)
 
-              # Debug print with readable format
+            # Debug print with readable format
             state_str = f"[pos={self.last_state[0]}, hunters={list(self.last_state[1])}]"
             action_dir = self.pos_to_direction(self.last_state[0], self.last_action)
             hunter_action_dir = self.pos_to_direction(self.last_state[1][0] if self.last_state[1] else None, self.last_other_action) if self.last_other_action else "None"
@@ -63,34 +97,42 @@ class NashQPrey(NashQAgent):
                 if hasattr(agent, 'step') and agent.__class__.__name__.endswith("Hunter"):
                     if hasattr(agent, 'last_action'):
                         hunter_action = agent.last_action
-
                         hunter_action_dir = self.pos_to_direction(hunter_positions[0] if hunter_positions else None, hunter_action)
-
                         print(f"Prey {self.unique_id} found hunter action: {hunter_action_dir}")
                     break
         
         action = self.select_action(state, hunter_action)
-        self.model.grid.move_agent(self, action)
-
+        self.model.grid.move_agent(self, action)        # Calculate survival reward with improved shaping
+        base_survival_reward = 0.1  # Reduced base reward to match hunter's reduced penalty
         
-        # Calculate survival reward
-        # Zero-sum reward: +1 for surviving a step (matches hunter's -1 step penalty)
-        reward = 1  # survived this step
-
+        # Distance-based reward component
+        hunter_positions = state[1]
+        if hunter_positions:
+            closest_hunter_dist = min([
+                self.manhattan_distance(action, hunter_pos) 
+                for hunter_pos in hunter_positions
+            ])
+            # Reward for maintaining distance from hunters
+            distance_reward = min(0.1, closest_hunter_dist * 0.02)
+            reward = base_survival_reward + distance_reward
+        else:
+            reward = base_survival_reward
         
+        # Penalty for staying in corners (prey should avoid corners too)
+        if self._is_corner_position(action):
+            reward -= 0.02  # Small corner penalty
+
         # Track reward for visualization
         self._step_reward = reward
-        
 
         # Store state and action for next update
-
         self.last_state = state
         self.last_action = action
         self.last_other_action = hunter_action
         self.last_reward = reward
-          # Debug: Print what we're storing with readable format
+        
+        # Debug: Print what we're storing with readable format
         store_state_str = f"[pos={state[0]}, hunters={list(state[1])}]"
-
         action_dir = self.pos_to_direction(state[0], action)
         hunter_action_dir = self.pos_to_direction(hunter_positions[0] if hunter_positions else None, hunter_action) if hunter_action else "None"
         print(f"Prey {self.unique_id} storing: state={store_state_str}, action={action_dir}, hunter_action={hunter_action_dir}")
