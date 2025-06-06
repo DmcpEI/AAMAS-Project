@@ -168,6 +168,18 @@ class HunterPreyModel(Model):
                 y = self.random.randrange(height)
                 self.grid.place_agent(naprey, (x, y))            #logger.debug(f"Placed NashQPrey {naprey.unique_id} at {(x, y)}")
         
+       #instantiate Minimax prey agents
+        for _ in range(self.num_minimax_preys):
+            miprey = MinimaxPrey(self, search_depth=self.minimax_search_depth)
+            pos = self._get_collision_free_position()
+            if pos:
+                self.grid.place_agent(miprey, pos)
+            else:
+                # Fallback if no collision-free position available
+                x = self.random.randrange(width)
+                y = self.random.randrange(height)
+                self.grid.place_agent(miprey, (x, y))
+            #logger.debug(f"Placed MinimaxPrey {miprey.unique_id} at {(x, y)}")        # Store all agents in a set for easy access
        
         # Initial data collection
         self.running = True

@@ -214,28 +214,29 @@ class ChartMetrics:
         """Reset metrics to the default configuration."""
         self._active_metrics = self._all_metrics.copy()
         logger.info("ChartMetrics reset to default configuration")
-    
     def update_active_metrics(self, model) -> None:
         """
         Update active metrics based on agent types present in the model.
         
         Args:
             model: The HunterPreyModel instance to check for agent types
-        """        # Start with basic metrics that should always be shown
-        self._active_metrics = ["Hunters", "Preys"]
-        
-        # Check for specific agent types
+        """
+        # Start with empty list and only add metrics for agent types that exist
+        self._active_metrics = []
+          # Check for specific agent types
+        has_base_preys = False
         has_random_hunters = False
         has_greedy_hunters = False
         has_nash_q_hunters = False
         has_minimax_hunters = False
         has_nash_q_preys = False
         has_minimax_preys = False
-        
         for agent in model.agents:
             agent_class = agent.__class__.__name__
             if agent_class == "RandomHunter":
                 has_random_hunters = True
+            elif agent_class == "Prey":
+                has_base_preys = True
             elif agent_class == "GreedyHunter":
                 has_greedy_hunters = True
             elif agent_class == "NashQHunter":
@@ -245,7 +246,12 @@ class ChartMetrics:
             elif agent_class == "NashQPrey":
                 has_nash_q_preys = True
             elif agent_class == "MinimaxPrey":
-                has_minimax_preys = True
+                has_minimax_preys = True        
+        # Add base metrics only if base agents are present
+        if has_random_hunters:
+            self._active_metrics.append("Hunters")
+        if has_base_preys:
+            self._active_metrics.append("Preys")
         
         # Add metrics based on agent types present
         if has_random_hunters:

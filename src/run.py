@@ -121,7 +121,8 @@ def StatusText(model) -> solara.Markdown:
         
         if has_nash_q or has_minimax:
             # Map metrics to display names, filtered by agent type
-            regular_nash_q_metrics = {
+            nash_q_metrics = {
+
                 "NashQHunters": "NashQ Hunters",
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
@@ -137,9 +138,9 @@ def StatusText(model) -> solara.Markdown:
                 "AvgMinimaxPreyReward": "Avg Minimax Prey Reward"
             }
             
-            # Only show regular Nash Q metrics if those agents exist
+            # Only show Nash Q metrics if Nash Q agents exist
             if has_nash_q:
-                for metric, display_name in regular_nash_q_metrics.items():
+                for metric, display_name in nash_q_metrics.items():
                     if metric in data:
                         if "Avg" in metric and "Reward" in metric:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
@@ -159,7 +160,7 @@ def StatusText(model) -> solara.Markdown:
             if has_minimax:
                 if additional_info:
                     additional_info += "\n"
-                additional_info += "*Minimax agents use tree search with alpha-beta pruning.*"
+                additional_info += "*Minimax agents using tree search with alpha-beta pruning.*"
             
             status_text = f"""## Simulation Status
 
@@ -232,16 +233,52 @@ def KillNotification(model) -> solara.VBox:
 
 
 # Main simulation initialization
+def DynamicPopChart(model):
+    """
+    Dynamic population chart component that updates metrics based on agent types.
+    
+    Args:
+        model: Mesa model instance
+        
+    Returns:
+        Solara component with dynamic chart metrics
+    """
+    try:
+        # Update chart metrics based on current model agents
+        chart_metrics.update_active_metrics(model)
+        
+        # Create a new plot component with updated metrics
+        current_metrics = chart_metrics.metrics
+        
+        # Get datacollector data
+        if hasattr(model, 'datacollector') and model.datacollector.model_vars:
+            data = model.datacollector.get_model_vars_dataframe()
+            
+            # Filter data to only include active metrics that exist in the data
+            available_metrics = [metric for metric in current_metrics if metric in data.columns]
+            
+            if available_metrics and len(data) > 0:
+                # Create plot component with filtered data
+                PlotComponent = make_plot_component(available_metrics)
+                return PlotComponent(model)
+            else:
+                return solara.Markdown("**Chart**: No data available yet")
+        else:
+            return solara.Markdown("**Chart**: Data collector not initialized")
+            
+    except Exception as e:
+        logger.error(f"Error creating dynamic pop chart: {e}")
+        return solara.Markdown(f"**Chart Error**: {e}")
+
 def create_visualization_components():
     """
     Create and configure visualization components.
     
     Returns:
-        Tuple of (SpaceGrid, PopChart) components
+        Tuple of (SpaceGrid, DynamicPopChart) components
     """
     SpaceGrid = make_space_component(agent_portrayal)
-    PopChart = make_plot_component(chart_metrics.metrics)
-    return SpaceGrid, PopChart
+    return SpaceGrid, DynamicPopChart
 
 def create_model_from_params(model_params: Dict[str, Dict[str, Any]]) -> HunterPreyModel:
     """
@@ -264,7 +301,7 @@ def create_simulation_page() -> SolaraViz:
         Configured SolaraViz page
     """    
     # Create visualization components
-    SpaceGrid, PopChart = create_visualization_components()
+    SpaceGrid, DynamicPopChart = create_visualization_components()
     
     # Create model instance
     model = create_model_from_params(DEFAULT_SIMULATION_PARAMS)
@@ -274,7 +311,7 @@ def create_simulation_page() -> SolaraViz:
       # Create and configure the page
     page = SolaraViz(
         model,
-        components=[SpaceGrid, StatusText, PopChart, KillNotification, QTableView],
+        components=[SpaceGrid, StatusText, DynamicPopChart, KillNotification, QTableView],
         model_params=DEFAULT_SIMULATION_PARAMS,
         name="Hunter-Prey Nash Q-Learning Simulation"
     )
