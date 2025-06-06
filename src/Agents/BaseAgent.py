@@ -22,15 +22,13 @@ class BaseAgent(Agent):
         empty_cells = [cell for cell in self.model.grid.empties]
         if not empty_cells:
             return None
-        
-        # Filter out cells that already have agents
+          # Filter out cells that already have agents
         available_cells = []
         for cell in empty_cells:
             cell_contents = self.model.grid.get_cell_list_contents([cell])
             # Only consider truly empty cells (no agents)
             if not cell_contents:
                 available_cells.append(cell)
-        
         if available_cells:
             return self.random.choice(available_cells)
         else:
@@ -68,7 +66,7 @@ class BaseAgent(Agent):
             pos (tuple, optional): Position to get neighbors for. If None, uses current position.
             
         Returns:
-            list: List of neighboring positions (excluding center, non-Moore neighborhood)
+            list: List of neighboring positions (movement only, no "stay still" action, non-Moore neighborhood)
         """        
         if pos is None:
             pos = self.pos

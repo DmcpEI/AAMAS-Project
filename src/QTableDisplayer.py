@@ -155,11 +155,12 @@ class QTableDisplayer:
             else:
                 return f"State: {state_str}, Action: {action_dir}, OtherAction: {other_action_dir} → Q={v:.3f}"
         except Exception as e:
-            self.logger.error(f"Error formatting Q-table entry {k}: {e}")
+            self.logger.error(f"Error formatting Q-table entry {k}: {e}")            
             return f"Error formatting entry: {k} → {v:.3f}"
-      # =====================================
-    # TERMINAL DISPLAY METHODS
+    
     # =====================================
+    # TERMINAL DISPLAY METHODS
+    # ======================================
 
     def print_q_table_section(self, model, agent_class_name: str, display_name: str, max_entries: int = 10) -> None:
         """
@@ -184,25 +185,24 @@ class QTableDisplayer:
         print(f"Avg Q-value: {stats['avg_value']:.3f}")
         print(f"Max Q-value: {stats['max_value']:.3f}")
         print(f"Min Q-value: {stats['min_value']:.3f}")
-
+        
         print()
             
         count = 0
         for k, v in list(q_table.items())[-max_entries:]:
             try:
-
                 print(f"  {self.format_q_entry(k, v, agent_class_name)}")
                 count += 1
-            except Exception as e:                print(f"  Error formatting Q-table entry {k}: {e}")
-                
-
+            except Exception as e:
+                print(f"  Error formatting Q-table entry {k}: {e}")
+    
     def has_nash_q_agents(self, model) -> bool:
         """Check if the model has any Nash Q-learning agents."""
         for agent in getattr(model, 'agents', []):
             if agent.__class__.__name__ in ["NashQHunter", "NashQPrey"]:
                 return True
         return False
-    
+        
     def print_all_q_tables(self, model) -> None:
         """Print all Q-tables to terminal for monitoring (only if Nash Q agents exist)."""
         # Only print if Nash Q agents are present
@@ -212,9 +212,12 @@ class QTableDisplayer:
         print("\n" + "="*80)
         print("Q-TABLES ANALYSIS")
         print("="*80)
-        self.print_q_table_section(model, "NashQHunter", "NASH Q-LEARNING HUNTER")
-        self.print_q_table_section(model, "NashQPrey", "NASH Q-LEARNING PREY")
+          # Print Nash Q tables if they exist
+        if self.has_nash_q_agents(model):
+            self.print_q_table_section(model, "NashQHunter", "NASH Q-LEARNING HUNTER")
+            self.print_q_table_section(model, "NashQPrey", "NASH Q-LEARNING PREY")
         
+    
         print("="*80 + "\n")
     
     # =====================================
@@ -258,8 +261,7 @@ class QTableDisplayer:
             markdown += f"{formatted_entry}\n"
         markdown += "```\n\n"
         return markdown
-        
-
+    
     def create_qtable_view_component(self, model) -> solara.Markdown:
         """
         Create Q-table view component for frontend display.
@@ -275,16 +277,20 @@ class QTableDisplayer:
             if not self.has_nash_q_agents(model):
                 return solara.Markdown("")
             
+            content = ""
+            
+            # Add Nash Q tables
             hunter_q_table = self.get_agent_q_table(model, "NashQHunter")
             prey_q_table = self.get_agent_q_table(model, "NashQPrey")
             
             hunter_md = self.generate_q_table_markdown(hunter_q_table, "Nash Q-Learning Hunter")
             prey_md = self.generate_q_table_markdown(prey_q_table, "Nash Q-Learning Prey")
             
-            return solara.Markdown(hunter_md + prey_md)
+            content += hunter_md + prey_md
+                    
+            return solara.Markdown(content)
         except Exception as e:
             self.logger.error(f"Error creating Q-table view: {e}")
-
             return solara.Markdown("")
 
     def create_status_component(self, model) -> None:

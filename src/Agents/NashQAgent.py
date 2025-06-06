@@ -19,11 +19,10 @@ class NashQAgent(BaseAgent):
         self.last_action = None
         self.last_other_action = None
         self.last_reward = 0  # Store previous reward for Q-update
-        
-        # Enhanced exploration parameters
+          # Enhanced exploration parameters
         self.position_history = []
-        self.max_history = 15  # Increased history tracking        self.loop_detection_threshold = 3  # If same position appears 3+ times, increase exploration
-        self.corner_bias_counter = 0  # Track time spent in corners
+        self.max_history = 15  # Increased history tracking
+        self.loop_detection_threshold = 3  # If same position appears 3+ times, increase exploration
         self.exploration_boost_steps = 0  # Steps remaining with boosted exploration
         
         # Q-value initialization strategy
@@ -39,7 +38,7 @@ class NashQAgent(BaseAgent):
             init_value = self.optimistic_init_value + np.random.uniform(-0.1, 0.1)
             self.Q[key] = init_value
             return init_value
-        return self.Q.get(key, 0.0)    
+        return self.Q.get(key, 0.0)      
     def _is_corner_position(self, pos):
         """Check if position is in a corner of the grid."""
         if pos is None:
@@ -60,16 +59,16 @@ class NashQAgent(BaseAgent):
     def get_other_positions(self, state):
         """Extract other agent positions from state. Must be implemented by subclass."""
         raise NotImplementedError
-    
     def get_other_agent_q_table(self):
         """
         Get other agent's Q-table for Nash equilibrium computation.
         Must be implemented by subclass to identify the other agent.
         """
-        raise NotImplementedError    
+        raise NotImplementedError
+    
     def select_action(self, state, other_action=None):
         """
-        Select action using Nash Q-Learning strategy with enhanced exploration.
+        Select action using Nash Q-Learning strategy.
         """
         actions = self.get_possible_actions()
         
@@ -81,15 +80,6 @@ class NashQAgent(BaseAgent):
         
         # Enhanced exploration logic
         current_epsilon = self.epsilon
-        
-        # Check for corner bias
-        if self._is_corner_position(current_pos):
-            self.corner_bias_counter += 1
-            if self.corner_bias_counter > 5:  # Spent too much time in corners
-                current_epsilon = min(0.4, current_epsilon * 2.5)
-                self.exploration_boost_steps = max(self.exploration_boost_steps, 10)
-        else:
-            self.corner_bias_counter = max(0, self.corner_bias_counter - 1)
         
         # Apply exploration boost if active
         if self.exploration_boost_steps > 0:
@@ -107,12 +97,10 @@ class NashQAgent(BaseAgent):
                 # Increase exploration when stuck in a loop
                 current_epsilon = min(0.4, current_epsilon * 2.0)
                 self.exploration_boost_steps = max(self.exploration_boost_steps, 8)
-          # ε-greedy exploration with dynamic epsilon
+        
+        # ε-greedy exploration
         if np.random.rand() < current_epsilon:
-            # Enhanced random selection - avoid staying in same position if possible
-            move_actions = [a for a in actions if a != current_pos]            
-            if move_actions and len(move_actions) > 1:
-                return self.random.choice(move_actions)
+            # Random exploration - select from all available actions
             return self.random.choice(actions)
         
         # Get other agent's Q-table for Nash computation

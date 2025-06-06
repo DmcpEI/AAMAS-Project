@@ -16,7 +16,6 @@ from mesa.visualization import SolaraViz, make_space_component, make_plot_compon
 from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
-
 from Agents.Hunters.MinimaxHunter import MinimaxHunter
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxPrey import MinimaxPrey
@@ -29,11 +28,10 @@ from ChartMetrics import chart_metrics
 # Configuration
 DEFAULT_SIMULATION_PARAMS = {
     "N_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Hunters"},
-
     "N_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Preys"},
     "N_greedy_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Greedy Hunters"},
     "N_nash_q_hunters": {"type": "SliderInt", "value": 1, "min": 0, "max": 10, "step": 1, "label": "Number of Nash Q-learning Hunters"},
-    "N_nash_q_preys": {"type": "SliderInt", "value": 1, "min": 0, "max": 20, "step": 1, "label": "Number of Nash Q-learning Preys"},    
+    "N_nash_q_preys": {"type": "SliderInt", "value": 1, "min": 0, "max": 20, "step": 1, "label": "Number of Nash Q-learning Preys"},
     "N_minimax_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Minimax Hunters"},
     "N_minimax_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Minimax Preys"},
     "minimax_search_depth": {"type": "SliderInt", "value": 4, "min": 1, "max": 6, "step": 1, "label": "Minimax Search Depth"},
@@ -62,7 +60,6 @@ def get_agent_portrayal_config() -> Dict[str, Dict[str, Any]]:
         RandomHunter: {"color": "#E7E43C", "shape": "circle", "r": 0.5},
         GreedyHunter: {"color": "#FFE66D", "shape": "circle", "r": 0.5},
         NashQHunter: {"color": "#FF5733", "shape": "circle", "r": 0.8},
-
         MinimaxHunter: {"color": "#8B0000", "shape": "square", "r": 0.8},
         NashQPrey: {"color": "#33FF57", "shape": "circle", "r": 0.8},
         MinimaxPrey: {"color": "#008000", "shape": "square", "r": 0.8},
@@ -114,7 +111,6 @@ def StatusText(model) -> solara.Markdown:
         qtable_displayer.create_status_component(model)
         
         # Get the last collected data
-
         data = model.datacollector.get_model_vars_dataframe().iloc[-1]        
         
         # Check what types of agents we have
@@ -125,16 +121,14 @@ def StatusText(model) -> solara.Markdown:
         
         if has_nash_q or has_minimax:
             # Map metrics to display names, filtered by agent type
-            nash_q_metrics = {
-
+            regular_nash_q_metrics = {
                 "NashQHunters": "NashQ Hunters",
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
                 "AvgNashQHunterReward": "Avg NashQ Hunter Reward",
-                "AvgNashQPreyReward": "Avg NashQ Prey Reward"
+                "AvgNashQPreyReward": "Avg NashQ Prey Reward",
             }
             
-
             minimax_metrics = {
                 "MinimaxHunters": "Minimax Hunters",
                 "MinimaxPreys": "Minimax Preys",
@@ -143,15 +137,15 @@ def StatusText(model) -> solara.Markdown:
                 "AvgMinimaxPreyReward": "Avg Minimax Prey Reward"
             }
             
-            # Only show Nash Q metrics if Nash Q agents exist
+            # Only show regular Nash Q metrics if those agents exist
             if has_nash_q:
-                for metric, display_name in nash_q_metrics.items():
+                for metric, display_name in regular_nash_q_metrics.items():
                     if metric in data:
                         if "Avg" in metric and "Reward" in metric:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
                         else:
                             status_lines.append(f"- {display_name}: {int(data[metric])}")
-            
+                       
             # Only show Minimax metrics if Minimax agents exist
             if has_minimax:
                 for metric, display_name in minimax_metrics.items():
@@ -162,13 +156,10 @@ def StatusText(model) -> solara.Markdown:
                             status_lines.append(f"- {display_name}: {int(data[metric])}")
             
             additional_info = ""
-            if has_nash_q:
-                additional_info += "*Check console for detailed Nash Q-table analysis.*"
             if has_minimax:
                 if additional_info:
                     additional_info += "\n"
                 additional_info += "*Minimax agents use tree search with alpha-beta pruning.*"
-
             
             status_text = f"""## Simulation Status
 
@@ -181,7 +172,6 @@ def StatusText(model) -> solara.Markdown:
             """
         else:
             # Show basic simulation info without advanced agent specific metrics
-
             status_text = f"""## Simulation Status
 
 **Step {model.steps}:**
@@ -272,21 +262,28 @@ def create_simulation_page() -> SolaraViz:
     
     Returns:
         Configured SolaraViz page
-    """    # Create visualization components
+    """    
+    # Create visualization components
     SpaceGrid, PopChart = create_visualization_components()
     
     # Create model instance
     model = create_model_from_params(DEFAULT_SIMULATION_PARAMS)
     
-    # Create and configure the page
+    # Update chart metrics based on active agents
+    chart_metrics.update_active_metrics(model)
+      # Create and configure the page
     page = SolaraViz(
         model,
-
-        components=[ SpaceGrid, StatusText, PopChart, KillNotification,  QTableView],
-
+        components=[SpaceGrid, StatusText, PopChart, KillNotification, QTableView],
         model_params=DEFAULT_SIMULATION_PARAMS,
         name="Hunter-Prey Nash Q-Learning Simulation"
     )
+    
+    # Add callback to update metrics when model changes
+    def on_model_update(new_model):
+        chart_metrics.update_active_metrics(new_model)
+    
+    page.on_model_change = on_model_update
     
     return page
 
