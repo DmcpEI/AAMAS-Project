@@ -6,11 +6,10 @@ from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
 
-from Agents.Hunters.MinimaxHunter import MinimaxHunter
+from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
 from Agents.Preys.Prey import Prey
 from Agents.Preys.NashQPrey import NashQPrey
-
-from Agents.Preys.MinimaxPrey import MinimaxPrey
+from Agents.Preys.MinimaxQPrey import MinimaxQPrey
 
 from typing import Optional
 import logging
@@ -26,40 +25,39 @@ class HunterPreyModel(Model):
     A model with dynamic numbers of hunters and preys on a non-toroidal grid.
     Uses the AgentSet API for scheduling.
     """
+    
     def __init__(
         self,
         N_hunters: int = 10,
         N_greedy_hunters: int = 0,
         N_nash_q_hunters: int = 0,
-        N_minimax_hunters: int = 0,
+        N_minimax_q_hunters: int = 0,
         N_preys: int = 50,
         N_nash_q_preys: int = 0,
-        N_minimax_preys: int = 0,
+        N_minimax_q_preys: int = 0,
         width: int = 20,
         height: int = 20,
-        minimax_search_depth: int = 4,
         print_step_rewards: bool = True,
         seed: Optional[int] = None    ):
         # Initialize base Model (sets up self.agents, RNG, etc.)
         super().__init__(seed=seed)
         logger.info(
             f"Initializing model with {N_hunters} hunters, {N_greedy_hunters} greedy hunters, "
-            f"{N_minimax_hunters} minimax hunters, {N_preys} preys, {N_nash_q_preys} Nash Q-learning preys, "
+            f"{N_minimax_q_hunters} minimax q-hunters, {N_preys} preys, {N_nash_q_preys} Nash Q-learning preys, "
             f"on a {width}x{height} grid"
         )
-        self.num_hunters = N_hunters
+        self.num_hunters = N_hunters        
         self.num_greedy_hunters = N_greedy_hunters
         self.num_nash_q_hunters = N_nash_q_hunters
-        self.num_minimax_hunters = N_minimax_hunters
+        self.num_minimax_q_hunters = N_minimax_q_hunters
         self.num_preys = N_preys
         self.num_nash_q_preys = N_nash_q_preys
-        self.num_minimax_preys = N_minimax_preys
-        self.minimax_search_depth = minimax_search_depth
+        self.num_minimax_q_preys = N_minimax_q_preys
         self.print_step_rewards = print_step_rewards
         self.grid = MultiGrid(width, height, torus=False)        # Kill notification system with persistent display
         self.kill_occurred_this_step = False
         self.kill_info = None  # Will store {'hunter_id': X, 'prey_id': Y, 'hunter_type': 'type', 'position': (x,y)}
-        self.kill_notification_duration = 5  # Show notification for 5 steps
+        self.kill_notification_duration = 1  # Show notification for 1 steps
         self.kill_notification_timer = 0  # Countdown timer for showing notification
         self.pending_hunter_teleports = []  # List of hunters waiting to teleport next step
         self.pending_prey_respawns = []  # List of prey waiting to respawn next step# Nash Q-Learning synchronization system (2-phase approach)
@@ -72,28 +70,28 @@ class HunterPreyModel(Model):
         RandomHunter.total_kills = 0
         GreedyHunter.total_kills = 0
         NashQHunter.total_kills = 0
-        MinimaxHunter.total_kills = 0        
+        MinimaxQHunter.total_kills = 0        
         
         # Data collector for live counts
         self.datacollector = DataCollector({
             "Hunters": lambda m: m.count_type(RandomHunter),
             "GreedyHunters": lambda m: m.count_type(GreedyHunter),
             "NashQHunters": lambda m: m.count_type(NashQHunter),
-            "MinimaxHunters": lambda m: m.count_type(MinimaxHunter),
+            "MinimaxQHunters": lambda m: m.count_type(MinimaxQHunter),
             "Preys": lambda m: m.count_type(Prey),
             "NashQPreys": lambda m: m.count_type(NashQPrey),
-            "MinimaxPreys": lambda m: m.count_type(MinimaxPrey),
+            "MinimaxQPreys": lambda m: m.count_type(MinimaxQPrey),
             "AvgEnergy": self.avg_energy,
             "RandomHunterKills": self.get_random_hunter_kills,
             "GreedyHunterKills": self.get_greedy_hunter_kills,
             "NashQHunterKills": self.get_nash_q_hunter_kills,
-            "MinimaxHunterKills": self.get_minimax_hunter_kills,
+            "MinimaxQHunterKills": self.get_minimax_q_hunter_kills,
             "AvgHunterReward": self.avg_hunter_reward,
             "AvgNashQHunterReward": self.avg_nash_q_hunter_reward,
-            "AvgMinimaxHunterReward": self.avg_minimax_hunter_reward,
+            "AvgMinimaxQHunterReward": self.avg_minimax_q_hunter_reward,
             "AvgPreyReward": self.avg_prey_reward,
             "AvgNashQPreyReward": self.avg_nash_q_prey_reward,
-            "AvgMinimaxPreyReward": self.avg_minimax_prey_reward,
+            "AvgMinimaxQPreyReward": self.avg_minimax_q_prey_reward,
         })# Create and place hunter agents
         for _ in range(self.num_hunters):
             hunter = RandomHunter(self)
@@ -131,20 +129,19 @@ class HunterPreyModel(Model):
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
                 self.grid.place_agent(nahunter, (x, y))
-            #logger.debug(f"Placed NashQHunter {nahunter.unique_id} at {(x, y)}")
 
-        # Create and place Minimax hunter agents
-        for _ in range(self.num_minimax_hunters):
-            mihunter = MinimaxHunter(self, search_depth=self.minimax_search_depth)
+        # Create and place Minimax Q-Learning hunter agents
+        for _ in range(self.num_minimax_q_hunters):
+            miqhunter = MinimaxQHunter(self)
             pos = self._get_collision_free_position()
             if pos:
-                self.grid.place_agent(mihunter, pos)
+                self.grid.place_agent(miqhunter, pos)
             else:
                 # Fallback if no collision-free position available
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
-                self.grid.place_agent(mihunter, (x, y))
-            #logger.debug(f"Placed MinimaxHunter {mihunter.unique_id} at {(x, y)}")
+                self.grid.place_agent(miqhunter, (x, y))
+            #logger.debug(f"Placed MinimaxQHunter {miqhunter.unique_id} at {(x, y)}")
 
         # Create and place prey agents
         for _ in range(self.num_preys):
@@ -167,19 +164,19 @@ class HunterPreyModel(Model):
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
                 self.grid.place_agent(naprey, (x, y))            #logger.debug(f"Placed NashQPrey {naprey.unique_id} at {(x, y)}")
-        
-       #instantiate Minimax prey agents
-        for _ in range(self.num_minimax_preys):
-            miprey = MinimaxPrey(self, search_depth=self.minimax_search_depth)
+
+        #instantiate Minimax Q-Learning prey agents
+        for _ in range(self.num_minimax_q_preys):
+            miqprey = MinimaxQPrey(self)
             pos = self._get_collision_free_position()
             if pos:
-                self.grid.place_agent(miprey, pos)
+                self.grid.place_agent(miqprey, pos)
             else:
                 # Fallback if no collision-free position available
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
-                self.grid.place_agent(miprey, (x, y))
-            #logger.debug(f"Placed MinimaxPrey {miprey.unique_id} at {(x, y)}")        # Store all agents in a set for easy access
+                self.grid.place_agent(miqprey, (x, y))
+            #logger.debug(f"Placed MinimaxQPrey {miqprey.unique_id} at {(x, y)}")# Store all agents in a set for easy access
        
         # Initial data collection
         self.running = True
@@ -202,7 +199,7 @@ class HunterPreyModel(Model):
             return None
     
     def step(self) -> None:
-        """Advance the model by one step with 3-phase Nash Q-Learning synchronization."""
+        """Advance the model by one step."""
         logger.debug(f"Model step {self.steps}")
 
         # Process pending teleports from previous kills
@@ -211,6 +208,7 @@ class HunterPreyModel(Model):
                 new_pos = self._get_collision_free_position()
                 if new_pos:
                     self.grid.move_agent(hunter, new_pos)
+            # Clear pending list
             self.pending_hunter_teleports.clear()
 
         # Process pending prey respawns from previous kills
@@ -237,12 +235,11 @@ class HunterPreyModel(Model):
         # Get all agents in random order for fair execution
         agents_list = list(self.agents)
         self.random.shuffle(agents_list)
-        
-        # Separate Nash Q agents from other agents
+          # Separate Nash Q and MinimaxQ agents from other agents
         nash_q_agents = []
         other_agents = []
         for agent in agents_list:
-            if isinstance(agent, (NashQHunter, NashQPrey)):
+            if isinstance(agent, (NashQHunter, NashQPrey, MinimaxQHunter, MinimaxQPrey)):
                 nash_q_agents.append(agent)
             else:
                 other_agents.append(agent)
@@ -350,15 +347,13 @@ class HunterPreyModel(Model):
         return RandomHunter.total_kills
 
     def get_greedy_hunter_kills(self):
-
         return GreedyHunter.total_kills
     
     def get_nash_q_hunter_kills(self):
         return NashQHunter.total_kills
 
-    
-    def get_minimax_hunter_kills(self):
-        return MinimaxHunter.total_kills
+    def get_minimax_q_hunter_kills(self):
+        return MinimaxQHunter.total_kills
     
     def avg_hunter_reward(self):
         rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, RandomHunter)]
@@ -371,16 +366,17 @@ class HunterPreyModel(Model):
     def avg_prey_reward(self):
         rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, Prey)]
         return np.mean(rewards) if rewards else 0.0
+        
     def avg_nash_q_prey_reward(self):
         rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, NashQPrey)]
         return np.mean(rewards) if rewards else 0.0
-        
-    def avg_minimax_hunter_reward(self):
-        rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, MinimaxHunter)]
+    
+    def avg_minimax_q_hunter_reward(self):
+        rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, MinimaxQHunter)]
         return np.mean(rewards) if rewards else 0.0
     
-    def avg_minimax_prey_reward(self):
-        rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, MinimaxPrey)]
+    def avg_minimax_q_prey_reward(self):
+        rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, MinimaxQPrey)]
         return np.mean(rewards) if rewards else 0.0
     def register_kill(self, hunter_agent, prey_agent):
         """Register a kill event"""

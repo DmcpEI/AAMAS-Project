@@ -22,8 +22,7 @@ class ChartMetrics:
 
     
     def __init__(self):
-        """Initialize the ChartMetrics with default metrics."""
-        # All available metrics
+        """Initialize the ChartMetrics with default metrics."""        # All available metrics
         self._all_metrics = [
             # NashQ metrics
             "NashQHunters",
@@ -38,6 +37,13 @@ class ChartMetrics:
             "MinimaxHunterKills", 
             "AvgMinimaxHunterReward",
             "AvgMinimaxPreyReward",
+            
+            # MinimaxQ metrics
+            "MinimaxQHunters",
+            "MinimaxQPreys",
+            "MinimaxQHunterKills",
+            "AvgMinimaxQHunterReward",
+            "AvgMinimaxQPreyReward",
             
             # Basic agent metrics
             "Hunters",
@@ -130,7 +136,6 @@ class ChartMetrics:
             if "NashQ" in metric
         ]
         return nash_q_metrics
-    
     def get_minimax_metrics(self) -> List[str]:
         """
         Get only the Minimax-related metrics from active metrics.
@@ -143,6 +148,19 @@ class ChartMetrics:
             if "Minimax" in metric
         ]
         return minimax_metrics
+    
+    def get_minimax_q_metrics(self) -> List[str]:
+        """
+        Get only the Minimax Q-related metrics from active metrics.
+        
+        Returns:
+            List of Minimax Q-specific metric names
+        """
+        minimax_q_metrics = [
+            metric for metric in self._active_metrics 
+            if "MinimaxQ" in metric
+        ]
+        return minimax_q_metrics
     def get_hunter_metrics(self) -> List[str]:
         """
         Get only the hunter-related metrics from active metrics.
@@ -188,22 +206,22 @@ class ChartMetrics:
         
         Returns:
             Dictionary containing metrics statistics and categorization
-        """        
-        nash_q_metrics = self.get_nash_q_metrics()
-        minimax_metrics = self.get_minimax_metrics()
+        """     
         
         return {
             "total_metrics": len(self._active_metrics),
             "active_metrics": self.metrics,
             "all_metrics": self.all_metrics,
-            "nash_q_metrics": nash_q_metrics,
-            "minimax_metrics": minimax_metrics,
+            "nash_q_metrics": self.get_nash_q_metrics(),
+            "minimax_metrics": self.get_minimax_metrics(),
+            "minimax_q_metrics": self.get_minimax_q_metrics(),
             "hunter_metrics": self.get_hunter_metrics(),
             "prey_metrics": self.get_prey_metrics(),
             "reward_metrics": self.get_reward_metrics(),
             "categories": {
-                "nash_q": len(nash_q_metrics),
-                "minimax": len(minimax_metrics),
+                "nash_q": len(self.get_nash_q_metrics()),
+                "minimax": len(self.get_minimax_metrics()),
+                "minimax_q": len(self.get_minimax_q_metrics()),
                 "hunter": len(self.get_hunter_metrics()),
                 "prey": len(self.get_prey_metrics()),
                 "reward": len(self.get_reward_metrics())
@@ -231,6 +249,8 @@ class ChartMetrics:
         has_minimax_hunters = False
         has_nash_q_preys = False
         has_minimax_preys = False
+        has_minimax_q_hunters = False
+        has_minimax_q_preys = False
         for agent in model.agents:
             agent_class = agent.__class__.__name__
             if agent_class == "RandomHunter":
@@ -247,6 +267,10 @@ class ChartMetrics:
                 has_nash_q_preys = True
             elif agent_class == "MinimaxPrey":
                 has_minimax_preys = True        
+            elif agent_class == "MinimaxQHunter":
+                has_minimax_q_hunters = True
+            elif agent_class == "MinimaxQPrey":
+                has_minimax_q_preys = True
         # Add base metrics only if base agents are present
         if has_random_hunters:
             self._active_metrics.append("Hunters")
@@ -286,6 +310,19 @@ class ChartMetrics:
             self._active_metrics.extend([
                 "MinimaxPreys",
                 "AvgMinimaxPreyReward"
+            ])
+        
+        if has_minimax_q_hunters:
+            self._active_metrics.extend([
+                "MinimaxQHunters",
+                "MinimaxQHunterKills",
+                "AvgMinimaxQHunterReward"
+            ])
+        
+        if has_minimax_q_preys:
+            self._active_metrics.extend([
+                "MinimaxQPreys",
+                "AvgMinimaxQPreyReward"
             ])
         
         logger.info(f"Updated active metrics: {len(self._active_metrics)} metrics active based on current agents")

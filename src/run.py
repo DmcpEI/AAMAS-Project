@@ -16,9 +16,9 @@ from mesa.visualization import SolaraViz, make_space_component, make_plot_compon
 from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
-from Agents.Hunters.MinimaxHunter import MinimaxHunter
+from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
 from Agents.Preys.NashQPrey import NashQPrey
-from Agents.Preys.MinimaxPrey import MinimaxPrey
+from Agents.Preys.MinimaxQPrey import MinimaxQPrey
 
 from Agents.Preys.Prey import Prey
 from Models.HunterPreyModel import HunterPreyModel
@@ -32,9 +32,8 @@ DEFAULT_SIMULATION_PARAMS = {
     "N_greedy_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Greedy Hunters"},
     "N_nash_q_hunters": {"type": "SliderInt", "value": 1, "min": 0, "max": 10, "step": 1, "label": "Number of Nash Q-learning Hunters"},
     "N_nash_q_preys": {"type": "SliderInt", "value": 1, "min": 0, "max": 20, "step": 1, "label": "Number of Nash Q-learning Preys"},
-    "N_minimax_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Minimax Hunters"},
-    "N_minimax_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Minimax Preys"},
-    "minimax_search_depth": {"type": "SliderInt", "value": 4, "min": 1, "max": 6, "step": 1, "label": "Minimax Search Depth"},
+    "N_minimax_q_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Minimax Q-learning Hunters"},
+    "N_minimax_q_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Minimax Q-learning Preys"},
     "width": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Width"},
     "height": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Height"},
 
@@ -55,14 +54,14 @@ logger = setup_logging()
 
 # Agent visual configuration and portrayal
 def get_agent_portrayal_config() -> Dict[str, Dict[str, Any]]:
-    """Get agent visual configuration mapping."""
+    """Get agent visual configuration mapping."""    
     return {
         RandomHunter: {"color": "#E7E43C", "shape": "circle", "r": 0.5},
         GreedyHunter: {"color": "#FFE66D", "shape": "circle", "r": 0.5},
         NashQHunter: {"color": "#FF5733", "shape": "circle", "r": 0.8},
-        MinimaxHunter: {"color": "#8B0000", "shape": "square", "r": 0.8},
+        MinimaxQHunter: {"color": "#DC143C", "shape": "rect", "r": 0.8},
         NashQPrey: {"color": "#33FF57", "shape": "circle", "r": 0.8},
-        MinimaxPrey: {"color": "#008000", "shape": "square", "r": 0.8},
+        MinimaxQPrey: {"color": "#228B22", "shape": "rect", "r": 0.8},
         Prey: {"color": "#006EB8", "shape": "circle", "r": 0.5},
 
     }
@@ -96,10 +95,10 @@ def QTableView(model) -> solara.Markdown:
     return qtable_displayer.create_qtable_view_component(model)
 
 
-def has_minimax_agents(model) -> bool:
-    """Check if the model has any Minimax agents."""
+def has_minimax_q_agents(model) -> bool:
+    """Check if the model has any MinimaxQ agents."""
     for agent in getattr(model, 'agents', []):
-        if agent.__class__.__name__ in ["MinimaxHunter", "MinimaxPrey"]:
+        if agent.__class__.__name__ in ["MinimaxQHunter", "MinimaxQPrey"]:
             return True
     return False
 
@@ -112,14 +111,13 @@ def StatusText(model) -> solara.Markdown:
         
         # Get the last collected data
         data = model.datacollector.get_model_vars_dataframe().iloc[-1]        
-        
-        # Check what types of agents we have
+          # Check what types of agents we have
         has_nash_q = qtable_displayer.has_nash_q_agents(model)
-        has_minimax = has_minimax_agents(model)
+        has_minimax_q = has_minimax_q_agents(model)
         
         status_lines = []
         
-        if has_nash_q or has_minimax:
+        if has_nash_q or has_minimax_q:
             # Map metrics to display names, filtered by agent type
             nash_q_metrics = {
 
@@ -127,15 +125,14 @@ def StatusText(model) -> solara.Markdown:
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
                 "AvgNashQHunterReward": "Avg NashQ Hunter Reward",
-                "AvgNashQPreyReward": "Avg NashQ Prey Reward",
-            }
+                "AvgNashQPreyReward": "Avg NashQ Prey Reward",            }
             
-            minimax_metrics = {
-                "MinimaxHunters": "Minimax Hunters",
-                "MinimaxPreys": "Minimax Preys",
-                "MinimaxHunterKills": "Minimax Hunter Kills",
-                "AvgMinimaxHunterReward": "Avg Minimax Hunter Reward",
-                "AvgMinimaxPreyReward": "Avg Minimax Prey Reward"
+            minimax_q_metrics = {
+                "MinimaxQHunters": "MinimaxQ Hunters",
+                "MinimaxQPreys": "MinimaxQ Preys",
+                "MinimaxQHunterKills": "MinimaxQ Hunter Kills",
+                "AvgMinimaxQHunterReward": "Avg MinimaxQ Hunter Reward",
+                "AvgMinimaxQPreyReward": "Avg MinimaxQ Prey Reward"
             }
             
             # Only show Nash Q metrics if Nash Q agents exist
@@ -145,11 +142,10 @@ def StatusText(model) -> solara.Markdown:
                         if "Avg" in metric and "Reward" in metric:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
                         else:
-                            status_lines.append(f"- {display_name}: {int(data[metric])}")
-                       
-            # Only show Minimax metrics if Minimax agents exist
-            if has_minimax:
-                for metric, display_name in minimax_metrics.items():
+                            status_lines.append(f"- {display_name}: {int(data[metric])}")                       
+            # Only show MinimaxQ metrics if MinimaxQ agents exist
+            if has_minimax_q:
+                for metric, display_name in minimax_q_metrics.items():
                     if metric in data:
                         if "Avg" in metric and "Reward" in metric:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
@@ -157,11 +153,7 @@ def StatusText(model) -> solara.Markdown:
                             status_lines.append(f"- {display_name}: {int(data[metric])}")
             
             additional_info = ""
-            if has_minimax:
-                if additional_info:
-                    additional_info += "\n"
-                additional_info += "*Minimax agents using tree search with alpha-beta pruning.*"
-            
+           
             status_text = f"""## Simulation Status
 
 **Step {model.steps}:**
