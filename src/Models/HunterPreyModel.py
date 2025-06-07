@@ -510,7 +510,7 @@ class HunterPreyModel(Model):
                                     if hasattr(agent, '_is_dead'):
                                         agent._is_dead = True
                                     else:
-                                        agent.scheduled_for_removal = True
+                                        agent.scheduled_for_removal = False
                                     
                                     # Schedule prey for respawn in next step
                                     self.pending_prey_respawns.append(agent)
@@ -528,16 +528,17 @@ class HunterPreyModel(Model):
                 except Exception as e:
                     logger.error(f"Error processing hunter {hunter.unique_id} for hunting: {e}")        
         except Exception as e:
-            logger.error(f"Error in _check_and_perform_hunting: {e}")
-
+            logger.error(f"Error in _check_and_perform_hunting: {e}")    
     def _calculate_nash_q_reward(self, agent, data):
-        """Calculate simple zero-sum reward for Nash Q agent."""
+        """Calculate reward for Nash Q agent and detect terminal states (kills/deaths)."""
         try:
             if agent.__class__.__name__.endswith("Hunter"):
                 # Hunter logic remains the same...
                 try:
                     hunt_result = data.get('hunt_result', 0)
                     if hunt_result > 0:
+                        # Mark this as a terminal state for the hunter (successful kill)
+                        data['is_terminal'] = True
                         return hunt_result  # Use actual hunt reward (usually SUCCESSFUL_HUNT_REWARD)
                     else:
                         # Double-check for any prey in same cell that might be dead
@@ -546,14 +547,17 @@ class HunterPreyModel(Model):
                             for cell_agent in cell_agents:
                                 if (cell_agent.__class__.__name__.endswith("Prey") and 
                                     getattr(cell_agent, '_is_dead', False)):
+                                    # Mark this as a terminal state for the hunter (successful kill)
+                                    data['is_terminal'] = True
                                     return ModelConfig.SUCCESSFUL_HUNT_REWARD  # Successful hunt
                         except Exception as e:
                             logger.error(f"Error checking cell contents for hunter {getattr(agent, 'unique_id', 'unknown')}: {e}")
-                        
-                        # No catch this step
+                          # No catch this step - not terminal
+                        data['is_terminal'] = False
                         return ModelConfig.MOVEMENT_COST  # Movement cost
                 except Exception as e:
                     logger.error(f"Error calculating hunter reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
+                    data['is_terminal'] = False
                     return ModelConfig.MOVEMENT_COST  # Fallback to movement cost
                             
             elif agent.__class__.__name__.endswith("Prey"):
@@ -582,19 +586,27 @@ class HunterPreyModel(Model):
                     if (is_dead or 
                         getattr(agent, 'scheduled_for_removal', False) or 
                         hunters_in_same_cell):
-                        print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10)")
+                        print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10) - TERMINAL STATE")
+                        # Mark this as a terminal state for the prey (death)
+                        data['is_terminal'] = True
                         return ModelConfig.DEATH_PENALTY  # -10
                     else:
                         print(f"DEBUG: Prey {agent.unique_id} gets SURVIVAL_REWARD (+0.1)")
+                        # Not terminal - prey survives this step
+                        data['is_terminal'] = False
                         return ModelConfig.SURVIVAL_REWARD  # +0.1
                 except Exception as e:
                     logger.error(f"Error calculating prey reward: {e}")
+                    data['is_terminal'] = False
                     return ModelConfig.SURVIVAL_REWARD
             
+            # Default case
+            data['is_terminal'] = False
             return 0.0
         except Exception as e:
             logger.error(f"Error in _calculate_nash_q_reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
             # Return safe fallback based on agent type
+            data['is_terminal'] = False
             if hasattr(agent, '__class__') and agent.__class__.__name__.endswith("Hunter"):
                 return ModelConfig.MOVEMENT_COST
             else:
@@ -614,8 +626,7 @@ class HunterPreyModel(Model):
         """Update Q-tables for all Nash Q agents using synchronized experiences."""
         try:
             logger.debug(f"Nash Q Phase 3: Updating Q-tables for {len(nash_q_data)} agents")
-            
-            # Update Q-tables for all Nash Q agents
+              # Update Q-tables for all Nash Q agents
             for agent_id, data in nash_q_data.items():
                 try:
                     agent = data['agent']
@@ -623,7 +634,7 @@ class HunterPreyModel(Model):
                     # Skip if agent no longer exists or is dead
                     if agent not in self.agents or getattr(agent, '_is_dead', False):
                         continue
-                        
+                    
                     try:
                         state_before = data['state_before']
                         action = data['action']
@@ -633,12 +644,28 @@ class HunterPreyModel(Model):
                     except KeyError as e:
                         logger.error(f"Missing data key for agent {agent_id}: {e}")
                         continue
+                    
+                    # Check if this is a terminal state and route to appropriate update method
+                    is_terminal = data.get('is_terminal', False)
+                    
                     # Update Q-table with each interacting agent
                     try:
                         if other_actions:
                             for other_id, other_action in other_actions.items():
                                 try:
-                                    if hasattr(agent, 'update_q_nash'):
+                                    if is_terminal and hasattr(agent, 'update_q_terminal'):
+                                        # Terminal state - use specialized terminal update
+                                        agent.update_q_terminal(
+                                            state_before,
+                                            action,
+                                            reward,
+                                            other_action
+                                        )
+                                        
+                                        logger.debug(f"Nash Q terminal update: Agent {agent_id} with other {other_id}, "
+                                                   f"reward={reward:.3f}, action={action}, other_action={other_action}")
+                                    elif hasattr(agent, 'update_q_nash'):
+                                        # Regular state - use normal Nash Q update
                                         agent.update_q_nash(
                                             state_before,
                                             action,
@@ -654,7 +681,19 @@ class HunterPreyModel(Model):
                         else:
                             # No interactions - update with None as other action
                             try:
-                                if hasattr(agent, 'update_q_nash'):
+                                if is_terminal and hasattr(agent, 'update_q_terminal'):
+                                    # Terminal state - use specialized terminal update
+                                    agent.update_q_terminal(
+                                        state_before,
+                                        action,
+                                        reward,
+                                        None
+                                    )
+                                    
+                                    logger.debug(f"Nash Q terminal update: Agent {agent_id} (no interactions), "
+                                               f"reward={reward:.3f}, action={action}")
+                                elif hasattr(agent, 'update_q_nash'):
+                                    # Regular state - use normal Nash Q update
                                     agent.update_q_nash(
                                         state_before,
                                         action,

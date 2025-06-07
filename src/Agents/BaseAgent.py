@@ -78,7 +78,7 @@ class BaseAgent(Agent):
         
         Args:
             return_reward (bool): If True, returns numeric reward (for NashQ agents)
-                                 If False, returns boolean success (for other hunters)
+                                If False, returns boolean success (for other hunters)
         
         Returns:
             int or bool: Reward value if return_reward=True, success boolean otherwise
@@ -90,10 +90,24 @@ class BaseAgent(Agent):
         success = False
         reward = 0
         
+        print(f"DEBUG Hunt: Hunter {self.unique_id} at {self.pos} looking for prey")
+        print(f"  - Found {len(cell_agents)} agents in cell")
+        
         # Look for prey
         for agent in cell_agents:
-            if agent.__class__.__name__.endswith("Prey"):                # Only hunt if prey is not already scheduled for removal
-                if not getattr(agent, 'scheduled_for_removal', False):                      # Mark the prey as caught/eaten
+            if agent.__class__.__name__.endswith("Prey"):
+                scheduled = getattr(agent, 'scheduled_for_removal', False)
+                is_dead = getattr(agent, '_is_dead', False)
+                
+                print(f"DEBUG Hunt: Found Prey {agent.unique_id} at {agent.pos}")
+                print(f"  - scheduled_for_removal: {scheduled}")
+                print(f"  - _is_dead: {is_dead}")
+                
+                # Only hunt if prey is not already scheduled for removal
+                if not scheduled:
+                    print(f"  - HUNTING! Marking prey as caught")
+                    
+                    # Mark the prey as caught/eaten
                     logger.info(f"{self.__class__.__name__} {self.unique_id} ate {agent.__class__.__name__} {agent.unique_id} at {self.pos}")
                     print(f"🎯 CATCH! {self.__class__.__name__} {self.unique_id} caught {agent.__class__.__name__} {agent.unique_id} at cell {self.pos}")
                     
@@ -104,7 +118,7 @@ class BaseAgent(Agent):
                     if hasattr(agent, '_is_dead'):
                         agent._is_dead = True
                     else:
-                        agent.scheduled_for_removal = True
+                        agent.scheduled_for_removal = False
                     
                     # Schedule prey for respawn in next step
                     #self.model.pending_prey_respawns.append(agent)
@@ -117,7 +131,14 @@ class BaseAgent(Agent):
                     
                     success = True
                     reward = 10  # Reward for successful hunt
+                    print(f"  - SUCCESS! Returning reward: {reward}")
                     break
+                else:
+                    print(f"  - SKIPPING hunt (prey already marked for removal)")
+        
+        if not success:
+            print(f"DEBUG Hunt: Hunter {self.unique_id} found no valid prey to hunt")
+            print(f"  - Returning reward: {reward}")
         
         return reward if return_reward else success
 

@@ -193,6 +193,36 @@ class NashQAgent(BaseAgent):
             return new_q
         return 0.0
 
+    def update_q_terminal(self, last_state, last_action, reward, other_action):
+        """
+        Update Q-table for terminal states (kills/deaths) where no next state exists.
+        Terminal states have no future rewards, so future Q-value is 0.
+        
+        Args:
+            last_state: State before terminal event
+            last_action: Action that led to terminal event
+            reward: Terminal reward (positive for kills, negative for deaths)
+            other_action: Other agent's action (can be None)
+        """
+        if last_state is not None and last_action is not None:
+            # Use None as placeholder if other_action is unknown
+            key_other_action = other_action
+            
+            # Terminal state update: no future rewards (next_q = 0)
+            old_q = self._get_q_value(last_state, last_action, key_other_action)
+            new_q = old_q + self.alpha * (reward - old_q)  # No gamma * next_q term
+            self.Q[(last_state, last_action, key_other_action)] = new_q
+            
+            # Debug output for terminal updates
+            agent_type = "Hunter" if self.__class__.__name__.endswith("Hunter") else "Prey"
+            terminal_type = "KILL" if reward > 0 else "DEATH"
+            print(f"{agent_type} {self.unique_id} TERMINAL Q-update ({terminal_type}): "
+                  f"Q({last_state}, {last_action}, {key_other_action}) = {new_q:.3f} "
+                  f"(reward={reward}, old_q={old_q:.3f})")
+            
+            return new_q
+        return 0.0
+
     def step(self):
         """Step method to be implemented by subclass."""
         raise NotImplementedError
