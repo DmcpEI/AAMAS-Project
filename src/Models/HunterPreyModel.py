@@ -275,12 +275,11 @@ class HunterPreyModel(Model):
             return q_learn_agents, other_agents
         except Exception as e:
             logger.error(f"Error in _separate_agents_by_type: {e}")
-            return [], []
-
+            return [], []    
     def _agents_can_interact(self, agent1, agent2):
         """
-        Check if two agents can interact based on Manhattan distance.
-        Agents can interact if they are in the same cell or adjacent cells.
+        Check if two agents can interact based on Chebyshev distance.
+        Agents can interact if they are in the same cell or adjacent cells (including diagonals).
         
         Args:
             agent1: First agent
@@ -298,13 +297,13 @@ class HunterPreyModel(Model):
                 logger.warning(f"Agent has None position: {getattr(agent1, 'unique_id', 'unknown')} or {getattr(agent2, 'unique_id', 'unknown')}")
                 return False
                 
-            # Calculate Manhattan distance
-            manhattan_distance = abs(agent1.pos[0] - agent2.pos[0]) + abs(agent1.pos[1] - agent2.pos[1])
+            # Calculate Chebyshev distance (includes diagonals)
+            chebyshev_distance = max(abs(agent1.pos[0] - agent2.pos[0]), abs(agent1.pos[1] - agent2.pos[1]))
             
-            # Agents can interact if they are in same cell or adjacent (Manhattan distance <= 1)
-            can_interact = manhattan_distance <= ModelConfig.MAX_INTERACTION_DISTANCE
+            # Agents can interact if they are in same cell or adjacent (Chebyshev distance <= 1)
+            can_interact = chebyshev_distance <= ModelConfig.MAX_INTERACTION_DISTANCE
             
-            logger.debug(f"Interaction check: Agent {getattr(agent1, 'unique_id', 'unknown')} at {agent1.pos} and Agent {getattr(agent2, 'unique_id', 'unknown')} at {agent2.pos}, distance: {manhattan_distance}, can_interact: {can_interact}")
+            logger.debug(f"Interaction check: Agent {getattr(agent1, 'unique_id', 'unknown')} at {agent1.pos} and Agent {getattr(agent2, 'unique_id', 'unknown')} at {agent2.pos}, distance: {chebyshev_distance}, can_interact: {can_interact}")
             
             return can_interact
             

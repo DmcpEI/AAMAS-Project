@@ -6,14 +6,14 @@ class NashQAgent(BaseAgent):
     """
     Base class for Nash Q-Learning agents.
     Implements Nash Q-Learning algorithm with Nash equilibrium computation.
-    """
-    def __init__(self, model, alpha=0.1, gamma=0.9, epsilon=0.1, move_cost=1):
+    """    
+    def __init__(self, model, alpha=0.05, gamma=0.9, epsilon=0.15, move_cost=1):
         super().__init__(model, move_cost)
-        self.alpha = alpha  # learning rate
+        self.alpha = alpha  # learning rate (reduced for larger action space)
         self.gamma = gamma  # discount factor
-        self.epsilon = epsilon  # exploration rate
-        self.epsilon_min = 0.05  # minimum exploration rate
-        self.epsilon_decay = 0.995  # decay rate per step
+        self.epsilon = epsilon  # exploration rate (increased for larger action space)
+        self.epsilon_min = 0.08  # minimum exploration rate (increased)
+        self.epsilon_decay = 0.998  # decay rate per step (slower decay)
         self.Q = {}  # Q-table: (state, my_action, other_action) -> value
         self.last_state = None
         self.last_action = None

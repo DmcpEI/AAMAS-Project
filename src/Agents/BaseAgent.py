@@ -33,12 +33,14 @@ class BaseAgent(Agent):
             return self.random.choice(available_cells)
         else:
             # Fallback to any empty cell if no completely empty cells available
-            return self.random.choice(empty_cells) if empty_cells else None
-
+            return self.random.choice(empty_cells) if empty_cells else None    
     def manhattan_distance(self, pos1, pos2):
         """Calculate Manhattan distance between two positions."""
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
+    def chebyshev_distance(self, pos1, pos2):
+        """Calculate Chebyshev distance between two positions (includes diagonals)."""
+        return max(abs(pos1[0] - pos2[0]), abs(pos1[1] - pos2[1]))
     def pos_to_direction(self, current_pos, action_pos):
         """Convert from current position and action position to direction string."""
         if action_pos is None or current_pos is None:
@@ -47,6 +49,7 @@ class BaseAgent(Agent):
         dx = action_pos[0] - current_pos[0]
         dy = action_pos[1] - current_pos[1]
         
+        # Orthogonal moves (4-directional)
         if dx == 0 and dy == 1:
             return "Up"
         elif dx == 0 and dy == -1:
@@ -55,6 +58,15 @@ class BaseAgent(Agent):
             return "Right"
         elif dx == -1 and dy == 0:
             return "Left"
+        # Diagonal moves (4 new directions)
+        elif dx == 1 and dy == 1:
+            return "Up-Right"
+        elif dx == 1 and dy == -1:
+            return "Down-Right"
+        elif dx == -1 and dy == 1:
+            return "Up-Left"        
+        elif dx == -1 and dy == -1:
+            return "Down-Left"
         else:
             return f"({dx},{dy})"  # Fallback for unexpected moves
 
@@ -66,11 +78,11 @@ class BaseAgent(Agent):
             pos (tuple, optional): Position to get neighbors for. If None, uses current position.
             
         Returns:
-            list: List of neighboring positions (movement only, no "stay still" action, non-Moore neighborhood)
+            list: List of neighboring positions (movement includes diagonals, no "stay still" action, Moore neighborhood)
         """        
         if pos is None:
             pos = self.pos
-        return self.model.grid.get_neighborhood(pos, moore=False, include_center=False)
+        return self.model.grid.get_neighborhood(pos, moore=True, include_center=False)
 
     def hunt(self, return_reward=False):
         """
@@ -140,11 +152,10 @@ class BaseAgent(Agent):
             print(f"DEBUG Hunt: Hunter {self.unique_id} found no valid prey to hunt")
             print(f"  - Returning reward: {reward}")
         
-        return reward if return_reward else success
-
+        return reward if return_reward else success    
     def random_move(self):
         neighbors = self.model.grid.get_neighborhood(
-            self.pos, moore=False, include_center=False
+            self.pos, moore=True, include_center=False
         )
         new_pos = self.random.choice(neighbors)
         self.model.grid.move_agent(self, new_pos)
