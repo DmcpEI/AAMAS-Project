@@ -17,6 +17,7 @@ from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
 from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
+from Agents.Hunters.CoordinatingHunter import CoordinatingHunter
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxQPrey import MinimaxQPrey
 
@@ -27,15 +28,16 @@ from ChartMetrics import chart_metrics
 
 # Configuration
 DEFAULT_SIMULATION_PARAMS = {
-    "N_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Hunters"},
+    "N_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Hunters"},    
     "N_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Preys"},
     "N_greedy_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Greedy Hunters"},
     "N_nash_q_hunters": {"type": "SliderInt", "value": 1, "min": 0, "max": 10, "step": 1, "label": "Number of Nash Q-learning Hunters"},
     "N_nash_q_preys": {"type": "SliderInt", "value": 1, "min": 0, "max": 20, "step": 1, "label": "Number of Nash Q-learning Preys"},
     "N_minimax_q_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Minimax Q-learning Hunters"},
     "N_minimax_q_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Minimax Q-learning Preys"},
-    "width": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Width"},
-    "height": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Height"},
+    "N_coordinating_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 15, "step": 1, "label": "Number of Coordinating Hunters"},
+    "width": {"type": "SliderInt", "value": 3, "min": 1, "max": 20, "step": 1, "label": "Grid Width"},
+    "height": {"type": "SliderInt", "value": 3, "min": 1, "max": 20, "step": 1, "label": "Grid Height"},
 
 }
 
@@ -60,6 +62,7 @@ def get_agent_portrayal_config() -> Dict[str, Dict[str, Any]]:
         GreedyHunter: {"color": "#FFE66D", "shape": "circle", "r": 0.5},
         NashQHunter: {"color": "#FF5733", "shape": "circle", "r": 0.8},
         MinimaxQHunter: {"color": "#DC143C", "shape": "rect", "r": 0.8},
+        CoordinatingHunter: {"color": "#9932CC", "shape": "circle", "r": 0.7},
         NashQPrey: {"color": "#33FF57", "shape": "circle", "r": 0.8},
         MinimaxQPrey: {"color": "#228B22", "shape": "rect", "r": 0.8},
         Prey: {"color": "#006EB8", "shape": "circle", "r": 0.5},
@@ -106,11 +109,8 @@ def has_minimax_q_agents(model) -> bool:
 def StatusText(model) -> solara.Markdown:
     """Component to display current simulation status and metrics."""
     try:
-        # Trigger Q-table printing to terminal (if Nash Q agents exist)
-        qtable_displayer.create_status_component(model)
-        
         # Get the last collected data
-        data = model.datacollector.get_model_vars_dataframe().iloc[-1]        
+        data = model.datacollector.get_model_vars_dataframe().iloc[-1]
           # Check what types of agents we have
         has_nash_q = qtable_displayer.has_nash_q_agents(model)
         has_minimax_q = has_minimax_q_agents(model)

@@ -325,7 +325,7 @@ class ChartMetrics:
                 "AvgMinimaxQPreyReward"
             ])
         
-        logger.info(f"Updated active metrics: {len(self._active_metrics)} metrics active based on current agents")
+        #logger.info(f"Updated active metrics: {len(self._active_metrics)} metrics active based on current agents")
     def __len__(self) -> int:
         """Return the number of metrics."""
         return len(self._active_metrics)

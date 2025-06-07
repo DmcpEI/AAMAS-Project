@@ -64,7 +64,6 @@ class QTableDisplayer:
     # =====================================
     # FORMATTING UTILITIES
     # =====================================
-    
     def pos_to_direction(self, current_pos: Optional[tuple], action_pos: Optional[tuple]) -> str:
         """
         Convert position coordinates to readable direction string.
@@ -79,7 +78,11 @@ class QTableDisplayer:
         if action_pos is None or current_pos is None:
             return "None"
         
-        # Handle cases where action_pos might be a string or other non-tuple type
+        # Handle string cases (like "unknown")
+        if isinstance(action_pos, str):
+            return action_pos.capitalize()
+        
+        # Handle cases where action_pos might be other non-tuple type
         if not isinstance(action_pos, (tuple, list)) or not isinstance(current_pos, (tuple, list)):
             return str(action_pos)
         
@@ -136,6 +139,7 @@ class QTableDisplayer:
         """
         try:
             state, action, other_action = k
+            #print(state, action, other_action)
 
             state_str = self.format_state_string(state, agent_type)
             action_dir = self.pos_to_direction(state[0], action)
@@ -175,6 +179,7 @@ class QTableDisplayer:
         print(f"\n=== {display_name} Q-table (last {max_entries} entries) ===")
         
         q_table = self.get_agent_q_table(model, agent_class_name)
+        #print(q_table)
         if not q_table:
             print(f"No {agent_class_name} found or Q-table empty")
             return

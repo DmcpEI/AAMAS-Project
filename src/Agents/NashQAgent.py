@@ -189,7 +189,7 @@ class NashQAgent(BaseAgent):
             old_q = self._get_q_value(last_state, last_action, key_other_action)
             new_q = old_q + self.alpha * (reward + self.gamma * best_next_q - old_q)
             self.Q[(last_state, last_action, key_other_action)] = new_q
-            
+            #print(f"Updated Q-value for {self.__class__.__name__} {self.unique_id}: ")
             return new_q
         return 0.0
 

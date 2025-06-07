@@ -5,13 +5,8 @@ from Agents.NashQAgent import NashQAgent
 class NashQPrey(NashQAgent):
     def __init__(self, model, alpha=0.1, gamma=0.9, epsilon=0.3, move_cost=1):
         super().__init__(model, alpha, gamma, epsilon, move_cost)
-        self.Q = {}  # Q-table: (state, prey_action, hunter_action) -> value
-        self.epsilon_min = 0.1  # Higher minimum exploration for prey
+        self.Q = {}  # Q-table: (state, prey_action, hunter_action) -> value        self.epsilon_min = 0.1  # Higher minimum exploration for prey
         self.epsilon_decay = 0.998  # Slower decay to maintain exploration longer
-          # Re-initialize enhanced exploration parameters (may have been overwritten)
-        self.loop_detection_threshold = 3
-        self.max_history = 15
-        self.exploration_boost_steps = 0
         
     def get_state(self):
         """Get current state: (my_position, hunter_positions)"""

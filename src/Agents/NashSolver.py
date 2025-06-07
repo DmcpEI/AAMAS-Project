@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import linprog
-import itertools
 
 class NashSolver:
     """
@@ -132,10 +131,12 @@ class NashSolver:
             payoff_matrix_p1, payoff_matrix_p2)
         
         return value_p1, value_p2
+
     @staticmethod
     def select_nash_action(q_table, state, my_actions, other_actions, other_q_table=None):
         """
-        Select action based on Nash equilibrium strategy.
+        Select action based on Nash equilibrium mixed strategy.
+        PURE GAME THEORY - NO softmax, NO temperature.
         
         Args:
             q_table: Agent's Q-table
@@ -145,10 +146,10 @@ class NashSolver:
             other_q_table: Other agent's Q-table (if available)
             
         Returns:
-            Selected action based on Nash equilibrium strategy
+            Selected action based on Nash equilibrium mixed strategy
         """
-        if other_q_table is None:
-            # If we don't have access to other agent's Q-table, use max strategy
+        if other_q_table is None or len(my_actions) <= 1 or len(other_actions) <= 1:
+            # If we don't have other agent's Q-table, use greedy strategy
             q_values = []
             for my_action in my_actions:
                 max_q = max([q_table.get((state, my_action, other_action), 0.0) 
@@ -156,18 +157,28 @@ class NashSolver:
                 q_values.append(max_q)
             return my_actions[np.argmax(q_values)]
         
-        # Build payoff matrices
+        # Build payoff matrices from Q-tables
         m, n = len(my_actions), len(other_actions)
         my_payoffs = np.zeros((m, n))
         other_payoffs = np.zeros((m, n))
+        
         for i, my_action in enumerate(my_actions):
             for j, other_action in enumerate(other_actions):
                 my_payoffs[i, j] = q_table.get((state, my_action, other_action), 0.0)
                 other_payoffs[i, j] = other_q_table.get((state, other_action, my_action), 0.0)
         
-        # Solve Nash equilibrium
-        my_strategy, _, _, _ = NashSolver.solve_nash_equilibrium(my_payoffs, other_payoffs.T)
-        
-        # Sample action according to strategy using indices
-        action_index = np.random.choice(len(my_actions), p=my_strategy)
-        return my_actions[action_index]
+        try:
+            # Solve Nash equilibrium using LINEAR PROGRAMMING (game theory)
+            my_strategy, _, _, _ = NashSolver.solve_nash_equilibrium(my_payoffs, other_payoffs.T)
+            
+            # Sample action according to Nash strategy
+            action_index = np.random.choice(len(my_actions), p=my_strategy)
+            return my_actions[action_index]
+            
+        except Exception as e:
+            print(f"Error computing Nash equilibrium: {e}")
+            print("Falling back to greedy selection.")
+            # Fallback to greedy (NOT softmax!)
+            q_values = [max([q_table.get((state, my_action, other_action), 0.0) 
+                           for other_action in other_actions]) for my_action in my_actions]
+            return my_actions[np.argmax(q_values)]

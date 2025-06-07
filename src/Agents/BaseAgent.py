@@ -93,9 +93,9 @@ class BaseAgent(Agent):
         # Look for prey
         for agent in cell_agents:
             if agent.__class__.__name__.endswith("Prey"):                # Only hunt if prey is not already scheduled for removal
-                if not getattr(agent, 'scheduled_for_removal', False):                    
-                    # Mark the prey as caught/eaten
+                if not getattr(agent, 'scheduled_for_removal', False):                      # Mark the prey as caught/eaten
                     logger.info(f"{self.__class__.__name__} {self.unique_id} ate {agent.__class__.__name__} {agent.unique_id} at {self.pos}")
+                    print(f"🎯 CATCH! {self.__class__.__name__} {self.unique_id} caught {agent.__class__.__name__} {agent.unique_id} at cell {self.pos}")
                     
                     # Register kill for visualization
                     self.model.register_kill(self, agent)
@@ -107,13 +107,13 @@ class BaseAgent(Agent):
                         agent.scheduled_for_removal = True
                     
                     # Schedule prey for respawn in next step
-                    self.model.pending_prey_respawns.append(agent)
+                    #self.model.pending_prey_respawns.append(agent)
                     
                     # Increment kill counter
                     self.increment_kills()
                     
                     # Schedule hunter teleportation next step
-                    self.model.pending_hunter_teleports.append(self)
+                    #self.model.pending_hunter_teleports.append(self)
                     
                     success = True
                     reward = 10  # Reward for successful hunt
