@@ -183,7 +183,7 @@ class NashQAgent(BaseAgent):
                 best_next_q = max(next_qs) if next_qs else 0.0
             
             # Use None as placeholder if other_action is unknown
-            key_other_action = other_action if other_action is not None else "unknown"
+            key_other_action = other_action
             
             # Standard Q-learning update with Nash value and optimistic initialization
             old_q = self._get_q_value(last_state, last_action, key_other_action)

@@ -534,8 +534,7 @@ class HunterPreyModel(Model):
         """Calculate simple zero-sum reward for Nash Q agent."""
         try:
             if agent.__class__.__name__.endswith("Hunter"):
-                # Hunter rewards: +SUCCESSFUL_HUNT_REWARD for catch, +MOVEMENT_COST for no catch
-                # Check if hunter caught prey this step using hunt result
+                # Hunter logic remains the same...
                 try:
                     hunt_result = data.get('hunt_result', 0)
                     if hunt_result > 0:
@@ -558,20 +557,44 @@ class HunterPreyModel(Model):
                     return ModelConfig.MOVEMENT_COST  # Fallback to movement cost
                             
             elif agent.__class__.__name__.endswith("Prey"):
-                # Prey rewards: +DEATH_PENALTY if caught, +SURVIVAL_REWARD if survived
                 try:
-                    # Check the _is_dead flag to see if prey was caught
-                    if getattr(agent, '_is_dead', False):
-                        return ModelConfig.DEATH_PENALTY  # Death penalty
+                    is_dead = getattr(agent, '_is_dead', False)
+                    
+                    # ADDITIONAL CHECK: Look for hunters in same cell
+                    hunters_in_same_cell = []
+                    try:
+                        cell_agents = self.grid.get_cell_list_contents([agent.pos])
+                        hunters_in_same_cell = [a for a in cell_agents 
+                                              if a.__class__.__name__.endswith("Hunter")]
+                    except Exception as e:
+                        logger.error(f"Error checking cell contents for prey: {e}")
+                    
+                    print(f"DEBUG: Prey {agent.unique_id} reward calculation:")
+                    print(f"  - _is_dead: {is_dead}")
+                    print(f"  - hunters_in_same_cell: {len(hunters_in_same_cell)}")
+                    print(f"  - scheduled_for_removal: {getattr(agent, 'scheduled_for_removal', False)}")
+                    print(f"  - agent.pos: {agent.pos}")
+                    if hunters_in_same_cell:
+                        for hunter in hunters_in_same_cell:
+                            print(f"  - hunter {hunter.unique_id} at {hunter.pos}")
+                    
+                    # Check multiple death indicators
+                    if (is_dead or 
+                        getattr(agent, 'scheduled_for_removal', False) or 
+                        hunters_in_same_cell):
+                        print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10)")
+                        return ModelConfig.DEATH_PENALTY  # -10
                     else:
-                        return ModelConfig.SURVIVAL_REWARD   # Survival reward
+                        print(f"DEBUG: Prey {agent.unique_id} gets SURVIVAL_REWARD (+0.1)")
+                        return ModelConfig.SURVIVAL_REWARD  # +0.1
                 except Exception as e:
-                    logger.error(f"Error calculating prey reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
-                    return ModelConfig.SURVIVAL_REWARD  # Fallback to survival reward
+                    logger.error(f"Error calculating prey reward: {e}")
+                    return ModelConfig.SURVIVAL_REWARD
             
             return 0.0
         except Exception as e:
-            logger.error(f"Error in _calculate_nash_q_reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")            # Return safe fallback based on agent type
+            logger.error(f"Error in _calculate_nash_q_reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
+            # Return safe fallback based on agent type
             if hasattr(agent, '__class__') and agent.__class__.__name__.endswith("Hunter"):
                 return ModelConfig.MOVEMENT_COST
             else:
