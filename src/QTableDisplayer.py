@@ -155,11 +155,12 @@ class QTableDisplayer:
             else:
                 return f"State: {state_str}, Action: {action_dir}, OtherAction: {other_action_dir} → Q={v:.3f}"
         except Exception as e:
-            self.logger.error(f"Error formatting Q-table entry {k}: {e}")
+            self.logger.error(f"Error formatting Q-table entry {k}: {e}")            
             return f"Error formatting entry: {k} → {v:.3f}"
-      # =====================================
-    # TERMINAL DISPLAY METHODS
+    
     # =====================================
+    # TERMINAL DISPLAY METHODS
+    # ======================================
 
     def print_q_table_section(self, model, agent_class_name: str, display_name: str, max_entries: int = 10) -> None:
         """
@@ -184,18 +185,16 @@ class QTableDisplayer:
         print(f"Avg Q-value: {stats['avg_value']:.3f}")
         print(f"Max Q-value: {stats['max_value']:.3f}")
         print(f"Min Q-value: {stats['min_value']:.3f}")
-
+        
         print()
             
         count = 0
         for k, v in list(q_table.items())[-max_entries:]:
             try:
-
                 print(f"  {self.format_q_entry(k, v, agent_class_name)}")
                 count += 1
-            except Exception as e:                print(f"  Error formatting Q-table entry {k}: {e}")
-                
-
+            except Exception as e:
+                print(f"  Error formatting Q-table entry {k}: {e}")
     def has_nash_q_agents(self, model) -> bool:
         """Check if the model has any Nash Q-learning agents."""
         for agent in getattr(model, 'agents', []):
@@ -203,17 +202,35 @@ class QTableDisplayer:
                 return True
         return False
     
+    def has_minimax_q_agents(self, model) -> bool:
+        """Check if the model has any Minimax Q-learning agents."""
+        for agent in getattr(model, 'agents', []):
+            if agent.__class__.__name__ in ["MinimaxQHunter", "MinimaxQPrey"]:
+                return True
+        return False
+    def has_q_learning_agents(self, model) -> bool:
+        """Check if the model has any Q-learning agents (Nash Q or Minimax Q)."""
+        return self.has_nash_q_agents(model) or self.has_minimax_q_agents(model)
+        
     def print_all_q_tables(self, model) -> None:
-        """Print all Q-tables to terminal for monitoring (only if Nash Q agents exist)."""
-        # Only print if Nash Q agents are present
-        if not self.has_nash_q_agents(model):
+        """Print all Q-tables to terminal for monitoring (only if Q-learning agents exist)."""
+        # Only print if Q-learning agents are present
+        if not self.has_q_learning_agents(model):
             return
             
         print("\n" + "="*80)
         print("Q-TABLES ANALYSIS")
         print("="*80)
-        self.print_q_table_section(model, "NashQHunter", "NASH Q-LEARNING HUNTER")
-        self.print_q_table_section(model, "NashQPrey", "NASH Q-LEARNING PREY")
+        
+        # Print Nash Q tables if they exist
+        if self.has_nash_q_agents(model):
+            self.print_q_table_section(model, "NashQHunter", "NASH Q-LEARNING HUNTER")
+            self.print_q_table_section(model, "NashQPrey", "NASH Q-LEARNING PREY")
+        
+        # Print Minimax Q tables if they exist
+        if self.has_minimax_q_agents(model):
+            self.print_q_table_section(model, "MinimaxQHunter", "MINIMAX Q-LEARNING HUNTER")
+            self.print_q_table_section(model, "MinimaxQPrey", "MINIMAX Q-LEARNING PREY")
         
         print("="*80 + "\n")
     
@@ -248,18 +265,23 @@ class QTableDisplayer:
 **Sample Entries (last {max_entries} of {stats['entries']}):**
 ```
 """
-        
-
-        # Extract agent class name from display name
-        agent_class_name = "NashQHunter" if "Hunter" in agent_type else "NashQPrey"
+            # Extract agent class name from display name
+        if "Nash Q-Learning Hunter" in agent_type:
+            agent_class_name = "NashQHunter"
+        elif "Nash Q-Learning Prey" in agent_type:
+            agent_class_name = "NashQPrey"
+        elif "Minimax Q-Learning Hunter" in agent_type:
+            agent_class_name = "MinimaxQHunter"
+        elif "Minimax Q-Learning Prey" in agent_type:
+            agent_class_name = "MinimaxQPrey"
+        else:
+            agent_class_name = "NashQHunter" if "Hunter" in agent_type else "NashQPrey"
           # Show last N entries
         for k, v in list(q_table.items())[-max_entries:]:
             formatted_entry = self.format_q_entry(k, v, agent_class_name)
             markdown += f"{formatted_entry}\n"
         markdown += "```\n\n"
         return markdown
-        
-
     def create_qtable_view_component(self, model) -> solara.Markdown:
         """
         Create Q-table view component for frontend display.
@@ -271,20 +293,35 @@ class QTableDisplayer:
             Solara Markdown component with Q-table information
         """
         try:
-            # Check if Nash Q agents exist - return empty if not
-            if not self.has_nash_q_agents(model):
+            # Check if any Q-learning agents exist - return empty if not
+            if not self.has_q_learning_agents(model):
                 return solara.Markdown("")
             
-            hunter_q_table = self.get_agent_q_table(model, "NashQHunter")
-            prey_q_table = self.get_agent_q_table(model, "NashQPrey")
+            content = ""
             
-            hunter_md = self.generate_q_table_markdown(hunter_q_table, "Nash Q-Learning Hunter")
-            prey_md = self.generate_q_table_markdown(prey_q_table, "Nash Q-Learning Prey")
+            # Add Nash Q tables if they exist
+            if self.has_nash_q_agents(model):
+                hunter_q_table = self.get_agent_q_table(model, "NashQHunter")
+                prey_q_table = self.get_agent_q_table(model, "NashQPrey")
+                
+                hunter_md = self.generate_q_table_markdown(hunter_q_table, "Nash Q-Learning Hunter")
+                prey_md = self.generate_q_table_markdown(prey_q_table, "Nash Q-Learning Prey")
+                
+                content += hunter_md + prey_md
             
-            return solara.Markdown(hunter_md + prey_md)
+            # Add Minimax Q tables if they exist
+            if self.has_minimax_q_agents(model):
+                minimax_hunter_q_table = self.get_agent_q_table(model, "MinimaxQHunter")
+                minimax_prey_q_table = self.get_agent_q_table(model, "MinimaxQPrey")
+                
+                minimax_hunter_md = self.generate_q_table_markdown(minimax_hunter_q_table, "Minimax Q-Learning Hunter")
+                minimax_prey_md = self.generate_q_table_markdown(minimax_prey_q_table, "Minimax Q-Learning Prey")
+                
+                content += minimax_hunter_md + minimax_prey_md
+                    
+            return solara.Markdown(content)
         except Exception as e:
             self.logger.error(f"Error creating Q-table view: {e}")
-
             return solara.Markdown("")
 
     def create_status_component(self, model) -> None:

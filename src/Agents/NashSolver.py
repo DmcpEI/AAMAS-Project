@@ -132,7 +132,6 @@ class NashSolver:
             payoff_matrix_p1, payoff_matrix_p2)
         
         return value_p1, value_p2
-    
     @staticmethod
     def select_nash_action(q_table, state, my_actions, other_actions, other_q_table=None):
         """
@@ -161,12 +160,12 @@ class NashSolver:
         m, n = len(my_actions), len(other_actions)
         my_payoffs = np.zeros((m, n))
         other_payoffs = np.zeros((m, n))
-        
         for i, my_action in enumerate(my_actions):
             for j, other_action in enumerate(other_actions):
                 my_payoffs[i, j] = q_table.get((state, my_action, other_action), 0.0)
                 other_payoffs[i, j] = other_q_table.get((state, other_action, my_action), 0.0)
-          # Solve Nash equilibrium
+        
+        # Solve Nash equilibrium
         my_strategy, _, _, _ = NashSolver.solve_nash_equilibrium(my_payoffs, other_payoffs.T)
         
         # Sample action according to strategy using indices
