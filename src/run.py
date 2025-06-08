@@ -19,6 +19,9 @@ from Agents.Hunters.NashQHunter import NashQHunter
 from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxQPrey import MinimaxQPrey
+from Agents.Hunters.CooperativeHunter import CooperativeHunter
+from Agents.Preys.CooperativePrey import CooperativePrey
+
 
 from Agents.Preys.Prey import Prey
 from Models.HunterPreyModel import HunterPreyModel
@@ -34,9 +37,16 @@ DEFAULT_SIMULATION_PARAMS = {
     "N_nash_q_preys": {"type": "SliderInt", "value": 1, "min": 0, "max": 20, "step": 1, "label": "Number of Nash Q-learning Preys"},
     "N_minimax_q_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Minimax Q-learning Hunters"},
     "N_minimax_q_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Minimax Q-learning Preys"},
+    "N_coop_hunters": {"type": "SliderInt", "value": 0, "min": 0, "max": 10, "step": 1, "label": "Number of Cooperative Hunters"},
+    "N_coop_preys": {"type": "SliderInt", "value": 0, "min": 0, "max": 20, "step": 1, "label": "Number of Cooperative Preys"},
     "width": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Width"},
     "height": {"type": "SliderInt", "value": 4, "min": 1, "max": 20, "step": 1, "label": "Grid Height"},
+}
 
+# Cooperation strategy parameters (separate for conditional display)
+COOPERATION_STRATEGY_PARAMS = {
+    "use_formation_hunting": {"type": "Checkbox", "value": True, "label": "🏹 Formation Hunting"},
+    "use_flanking": {"type": "Checkbox", "value": True, "label": "🎯 Flanking Strategy"},
 }
 
 def setup_logging() -> logging.Logger:
@@ -63,7 +73,8 @@ def get_agent_portrayal_config() -> Dict[str, Dict[str, Any]]:
         NashQPrey: {"color": "#33FF57", "shape": "circle", "r": 0.8},
         MinimaxQPrey: {"color": "#228B22", "shape": "rect", "r": 0.8},
         Prey: {"color": "#006EB8", "shape": "circle", "r": 0.5},
-
+        CooperativeHunter: {"color": "#FF8C00", "shape": "rect", "r": 0.9},  # Orange squares
+        CooperativePrey: {"color": "#9370DB", "shape": "rect", "r": 0.9},    # Purple squares
     }
 
 def agent_portrayal(agent) -> Dict[str, Any]:
@@ -103,6 +114,13 @@ def has_minimax_q_agents(model) -> bool:
     return False
 
 
+def has_coop_agents(model) -> bool:
+    """Check if the model has any Cooperative agents."""
+    for agent in getattr(model, 'agents', []):
+        if agent.__class__.__name__ in ["CooperativeHunter", "CooperativePrey"]:
+            return True
+    return False
+
 def StatusText(model) -> solara.Markdown:
     """Component to display current simulation status and metrics."""
     try:
@@ -111,21 +129,22 @@ def StatusText(model) -> solara.Markdown:
         
         # Get the last collected data
         data = model.datacollector.get_model_vars_dataframe().iloc[-1]        
-          # Check what types of agents we have
+        # Check what types of agents we have
         has_nash_q = qtable_displayer.has_nash_q_agents(model)
         has_minimax_q = has_minimax_q_agents(model)
+        has_coop = has_coop_agents(model)
         
         status_lines = []
         
-        if has_nash_q or has_minimax_q:
+        if has_nash_q or has_minimax_q or has_coop:
             # Map metrics to display names, filtered by agent type
             nash_q_metrics = {
-
                 "NashQHunters": "NashQ Hunters",
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
                 "AvgNashQHunterReward": "Avg NashQ Hunter Reward",
-                "AvgNashQPreyReward": "Avg NashQ Prey Reward",            }
+                "AvgNashQPreyReward": "Avg NashQ Prey Reward",            
+            }
             
             minimax_q_metrics = {
                 "MinimaxQHunters": "MinimaxQ Hunters",
@@ -133,6 +152,12 @@ def StatusText(model) -> solara.Markdown:
                 "MinimaxQHunterKills": "MinimaxQ Hunter Kills",
                 "AvgMinimaxQHunterReward": "Avg MinimaxQ Hunter Reward",
                 "AvgMinimaxQPreyReward": "Avg MinimaxQ Prey Reward"
+            }
+            
+            coop_metrics = {
+                "CoopHunters": "Cooperative Hunters",
+                "CoopPreys": "Cooperative Preys", 
+                "CoopHunterKills": "Cooperative Hunter Kills"
             }
             
             # Only show Nash Q metrics if Nash Q agents exist
@@ -143,6 +168,7 @@ def StatusText(model) -> solara.Markdown:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
                         else:
                             status_lines.append(f"- {display_name}: {int(data[metric])}")                       
+
             # Only show MinimaxQ metrics if MinimaxQ agents exist
             if has_minimax_q:
                 for metric, display_name in minimax_q_metrics.items():
@@ -151,6 +177,12 @@ def StatusText(model) -> solara.Markdown:
                             status_lines.append(f"- {display_name}: {data[metric]:.2f}")
                         else:
                             status_lines.append(f"- {display_name}: {int(data[metric])}")
+            
+            # Only show Cooperative metrics if Cooperative agents exist
+            if has_coop:
+                for metric, display_name in coop_metrics.items():
+                    if metric in data:
+                        status_lines.append(f"- {display_name}: {int(data[metric])}")
             
             additional_info = ""
            
@@ -223,6 +255,53 @@ def KillNotification(model) -> solara.VBox:
         solara.Markdown(notification_text, style=notification_style)
     ])
 
+@solara.component
+def CooperationStrategies(model):
+    """Component to display cooperation strategy checkboxes when cooperative hunters are present."""
+    
+    # Check if cooperative hunters are present in the model
+    n_coop_hunters = getattr(model, 'num_coop_hunters', 0)
+    
+    # Only show if cooperative hunters are being used
+    if n_coop_hunters > 0:
+        # Title section
+        title_style = {
+            'background-color': '#f0f8ff',
+            'padding': '10px',
+            'border-radius': '8px',
+            'margin': '10px 0',
+            'border': '2px solid #4169e1',
+            'text-align': 'center'
+        }
+        
+        with solara.VBox():
+            solara.Markdown("## 🤝 Cooperation Strategies", style=title_style)
+            
+            # Formation Hunting checkbox
+            def update_formation_hunting(value):
+                model.use_formation_hunting = value
+                logging.info(f"Formation hunting strategy updated: {value}")
+            
+            solara.Checkbox(
+                label="🏹 Formation Hunting",
+                value=getattr(model, 'use_formation_hunting', True),
+                on_value=update_formation_hunting
+            )
+            
+            # Flanking Strategy checkbox  
+            def update_flanking(value):
+                model.use_flanking = value
+                logging.info(f"Flanking strategy updated: {value}")
+            
+            solara.Checkbox(
+                label="🎯 Flanking Strategy",
+                value=getattr(model, 'use_flanking', True),
+                on_value=update_flanking
+            )
+    
+    else:
+        # Show empty container when no cooperative hunters
+        return solara.VBox([])
 
 # Main simulation initialization
 def DynamicPopChart(model):
@@ -283,6 +362,13 @@ def create_model_from_params(model_params: Dict[str, Dict[str, Any]]) -> HunterP
         Configured HunterPreyModel instance
     """
     param_values = {k: v["value"] for k, v in model_params.items() if isinstance(v, dict)}
+    
+    # Add default values for cooperation strategies if not present
+    if "use_formation_hunting" not in param_values:
+        param_values["use_formation_hunting"] = True
+    if "use_flanking" not in param_values:
+        param_values["use_flanking"] = True
+    
     return HunterPreyModel(**param_values)
 
 def create_simulation_page() -> SolaraViz:
@@ -295,16 +381,21 @@ def create_simulation_page() -> SolaraViz:
     # Create visualization components
     SpaceGrid, DynamicPopChart = create_visualization_components()
     
+    # Merge cooperation strategy parameters with default params
+    merged_params = DEFAULT_SIMULATION_PARAMS.copy()
+    merged_params.update(COOPERATION_STRATEGY_PARAMS)
+    
     # Create model instance
-    model = create_model_from_params(DEFAULT_SIMULATION_PARAMS)
+    model = create_model_from_params(merged_params)
     
     # Update chart metrics based on active agents
     chart_metrics.update_active_metrics(model)
-      # Create and configure the page
+    
+    # Create and configure the page
     page = SolaraViz(
         model,
-        components=[SpaceGrid, StatusText, DynamicPopChart, KillNotification, QTableView],
-        model_params=DEFAULT_SIMULATION_PARAMS,
+        components=[SpaceGrid, StatusText, DynamicPopChart, KillNotification, QTableView, CooperationStrategies],
+        model_params=merged_params,
         name="Hunter-Prey Nash Q-Learning Simulation"
     )
     

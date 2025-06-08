@@ -10,6 +10,8 @@ from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
 from Agents.Preys.Prey import Prey
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxQPrey import MinimaxQPrey
+from Agents.Hunters.CooperativeHunter import CooperativeHunter
+from Agents.Preys.CooperativePrey import CooperativePrey
 
 from typing import Optional
 import logging
@@ -35,10 +37,16 @@ class HunterPreyModel(Model):
         N_preys: int = 50,
         N_nash_q_preys: int = 0,
         N_minimax_q_preys: int = 0,
+        N_coop_hunters: int = 0,
+        N_coop_preys: int = 0,
         width: int = 20,
         height: int = 20,
         print_step_rewards: bool = True,
-        seed: Optional[int] = None    ):
+        seed: Optional[int] = None,
+        # Cooperation Strategy Parameters
+        use_formation_hunting: bool = True,
+        use_flanking: bool = True,
+    ):
         # Initialize base Model (sets up self.agents, RNG, etc.)
         super().__init__(seed=seed)
         logger.info(
@@ -53,7 +61,13 @@ class HunterPreyModel(Model):
         self.num_preys = N_preys
         self.num_nash_q_preys = N_nash_q_preys
         self.num_minimax_q_preys = N_minimax_q_preys
+        self.num_coop_hunters = N_coop_hunters
+        self.num_coop_preys = N_coop_preys
         self.print_step_rewards = print_step_rewards
+
+        # Store cooperation strategy settings
+        self.use_formation_hunting = use_formation_hunting
+        self.use_flanking = use_flanking
         self.grid = MultiGrid(width, height, torus=False)        # Kill notification system with persistent display
         self.kill_occurred_this_step = False
         self.kill_info = None  # Will store {'hunter_id': X, 'prey_id': Y, 'hunter_type': 'type', 'position': (x,y)}
@@ -71,6 +85,7 @@ class HunterPreyModel(Model):
         GreedyHunter.total_kills = 0
         NashQHunter.total_kills = 0
         MinimaxQHunter.total_kills = 0        
+        CooperativeHunter.total_kills = 0        
         
         # Data collector for live counts
         self.datacollector = DataCollector({
@@ -81,11 +96,14 @@ class HunterPreyModel(Model):
             "Preys": lambda m: m.count_type(Prey),
             "NashQPreys": lambda m: m.count_type(NashQPrey),
             "MinimaxQPreys": lambda m: m.count_type(MinimaxQPrey),
+            "CoopHunters": lambda m: len([a for a in m.agents if isinstance(a, CooperativeHunter)]),
+            "CoopPreys": lambda m: len([a for a in m.agents if isinstance(a, CooperativePrey)]),
             "AvgEnergy": self.avg_energy,
             "RandomHunterKills": self.get_random_hunter_kills,
             "GreedyHunterKills": self.get_greedy_hunter_kills,
             "NashQHunterKills": self.get_nash_q_hunter_kills,
             "MinimaxQHunterKills": self.get_minimax_q_hunter_kills,
+            "CoopHunterKills": self.get_coop_hunter_kills,
             "AvgHunterReward": self.avg_hunter_reward,
             "AvgNashQHunterReward": self.avg_nash_q_hunter_reward,
             "AvgMinimaxQHunterReward": self.avg_minimax_q_hunter_reward,
@@ -176,7 +194,41 @@ class HunterPreyModel(Model):
                 x = self.random.randrange(width)
                 y = self.random.randrange(height)
                 self.grid.place_agent(miqprey, (x, y))
-            #logger.debug(f"Placed MinimaxQPrey {miqprey.unique_id} at {(x, y)}")# Store all agents in a set for easy access
+            #logger.debug(f"Placed MinimaxQPrey {miqprey.unique_id} at {(x, y)}")
+
+        # Create and place Cooperative Hunter agents
+        for i in range(self.num_coop_hunters):
+            coop_hunter = CooperativeHunter(self)
+            # Set team_id after creation (groups of 3 hunters per team)
+            coop_hunter.team_id = i // 3
+            # Configure strategies based on model settings
+            coop_hunter.available_strategies = self.get_available_strategies()
+            pos = self._get_collision_free_position()
+            if pos:
+                self.grid.place_agent(coop_hunter, pos)
+            else:
+                # Fallback if no collision-free position available
+                x = self.random.randrange(width)
+                y = self.random.randrange(height)
+                self.grid.place_agent(coop_hunter, (x, y))
+            #logger.debug(f"Placed CooperativeHunter {coop_hunter.unique_id} at {(x, y)}")
+
+        # Create and place Cooperative Prey agents
+        for i in range(self.num_coop_preys):
+            coop_prey = CooperativePrey(self)
+            # Set flock_id after creation (groups of 4 prey per flock)
+            coop_prey.flock_id = i // 4
+            pos = self._get_collision_free_position()
+            if pos:
+                self.grid.place_agent(coop_prey, pos)
+            else:
+                # Fallback if no collision-free position available
+                x = self.random.randrange(width)
+                y = self.random.randrange(height)
+                self.grid.place_agent(coop_prey, (x, y))
+            #logger.debug(f"Placed CooperativePrey {coop_prey.unique_id} at {(x, y)}")
+
+# Store all agents in a set for easy access
        
         # Initial data collection
         self.running = True
@@ -355,6 +407,10 @@ class HunterPreyModel(Model):
     def get_minimax_q_hunter_kills(self):
         return MinimaxQHunter.total_kills
     
+    def get_coop_hunter_kills(self):
+        """Get total kills by cooperative hunters."""
+        return getattr(CooperativeHunter, 'total_kills', 0)
+
     def avg_hunter_reward(self):
         rewards = [getattr(a, '_step_reward', 0) for a in self.agents if isinstance(a, RandomHunter)]
         return np.mean(rewards) if rewards else 0.0
@@ -640,3 +696,19 @@ class HunterPreyModel(Model):
         
         print(f"TOTALS - Hunters: {total_hunter_reward:+.2f}, Preys: {total_prey_reward:+.2f}")
         print("=" * 30)
+    
+    def get_available_strategies(self):
+        """Get list of available cooperation strategies based on model settings."""
+        available_strategies = ["direct"]  # Direct pursuit is always available
+        
+        if self.use_flanking:
+            available_strategies.append("flanking")
+        
+        if self.use_formation_hunting:
+            available_strategies.append("formation_hunting")
+        
+        return available_strategies
+
+    # =====================================
+    # EXISTING METHODS
+    # =====================================
