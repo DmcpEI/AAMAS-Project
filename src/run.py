@@ -48,8 +48,7 @@ COOPERATION_STRATEGY_PARAMS = {
     "use_flanking": {"type": "Checkbox", "value": True, "label": "🎯 Flanking Strategy"},
     "use_bait_and_switch": {"type": "Checkbox", "value": False, "label": "🎭 Bait and Switch"},
     "use_flocking": {"type": "Checkbox", "value": False, "label": "🐰 Flocking Behavior"},
-    "use_enhanced_escape": {"type": "Checkbox", "value": False, "label": "🏃 Enhanced Escape"},
-}
+    }
 
 def setup_logging() -> logging.Logger:
     """Configure logging for the application."""
@@ -143,8 +142,8 @@ def StatusText(model) -> solara.Markdown:
                 "NashQHunters": "NashQ Hunters",
                 "NashQPreys": "NashQ Preys",
                 "NashQHunterKills": "NashQ Hunter Kills",
-                "AvgNashQHunterReward": "Avg NashQ Hunter Reward",
-                "AvgNashQPreyReward": "Avg NashQ Prey Reward",            }
+                "AvgNashQHunterReward": "NashQ Hunter Reward",
+                "AvgNashQPreyReward": "NashQ Prey Reward",            }
             
             minimax_q_metrics = {
                 "MinimaxQHunters": "MinimaxQ Hunters",
