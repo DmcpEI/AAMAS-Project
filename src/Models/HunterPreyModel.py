@@ -10,42 +10,18 @@ from Agents.Hunters.RandomHunter import RandomHunter
 from Agents.Hunters.GreedyHunter import GreedyHunter
 from Agents.Hunters.NashQHunter import NashQHunter
 from Agents.Hunters.MinimaxQHunter import MinimaxQHunter
-from Agents.Hunters.CoordinatingHunter import CoordinatingHunter
+from Agents.Hunters.CooperativeHunter import CooperativeHunter
 
 from Agents.Preys.Prey import Prey
 from Agents.Preys.NashQPrey import NashQPrey
 from Agents.Preys.MinimaxQPrey import MinimaxQPrey
+from Agents.Preys.CooperativePrey import CooperativePrey
 
-from Coordination.SurroundingCoordinator import SurroundingCoordinator
 from QTableDisplayer import qtable_displayer
 
-logger = logging.getLogger(__name__)
+from Models.ModelConfig import ModelConfig
 
-# Constants
-class ModelConfig:
-    """Configuration constants for the Hunter-Prey model"""
-    # Display and notification settings
-    DEFAULT_KILL_NOTIFICATION_DURATION = 1
-    DEFAULT_EXPLORATION_THRESHOLD = 3
-    DEFAULT_MAX_HISTORY = 15
-    
-    # Reward and penalty values
-    SUCCESSFUL_HUNT_REWARD = 10.0
-    MOVEMENT_COST = -0.1
-    SURVIVAL_REWARD = 0.1
-    DEATH_PENALTY = -10.0
-    
-    
-    # Nash Q-learning phases
-    NASH_Q_PHASE_NORMAL = "normal"
-    NASH_Q_PHASE_CHOOSE_ACTION = "choose_action"
-    NASH_Q_PHASE_OBSERVE = "observe"
-    NASH_Q_PHASE_UPDATE = "update"
-      # Interaction distance (Manhattan distance)
-    MAX_INTERACTION_DISTANCE = 1    # Mixed strategy configuration - Always use probabilistic action selection
-    USE_MIXED_STRATEGIES = True
-    RANDOM_EXPLORATION_PROBABILITY = 0.05  # 5% probability for pure random exploration (uniform distribution)
-    SOFTMAX_TEMPERATURE = 1.0  # Temperature for softmax probability computation
+logger = logging.getLogger(__name__)
     
 
 class HunterPreyModel(Model):
@@ -59,30 +35,40 @@ class HunterPreyModel(Model):
         N_greedy_hunters: int = 0,
         N_nash_q_hunters: int = 0,
         N_minimax_q_hunters: int = 0,
-        N_coordinating_hunters: int = 0,
         N_preys: int = 50,
         N_nash_q_preys: int = 0,
         N_minimax_q_preys: int = 0,
+        N_coop_hunters: int = 0,
+        N_coop_preys: int = 0,
         width: int = 20,
         height: int = 20,
         print_step_rewards: bool = True,
-        seed: Optional[int] = None    ):        # Initialize base Model (sets up self.agents, RNG, etc.)
+        seed: Optional[int] = None,
+        # Cooperation Strategy Parameters
+        use_formation_hunting: bool = True,
+        use_flanking: bool = True,
+    ):        # Initialize base Model (sets up self.agents, RNG, etc.)
         super().__init__(seed=seed)
         logger.info(
             f"Initializing model with {N_hunters} hunters, {N_greedy_hunters} greedy hunters, "
             f"{N_nash_q_hunters} nash q-hunters, {N_minimax_q_hunters} minimax q-hunters, "
-            f"{N_coordinating_hunters} coordinating hunters, {N_preys} preys, {N_nash_q_preys} Nash Q-learning preys, "
             f"on a {width}x{height} grid"
         )
         self.num_hunters = N_hunters        
         self.num_greedy_hunters = N_greedy_hunters
         self.num_nash_q_hunters = N_nash_q_hunters
         self.num_minimax_q_hunters = N_minimax_q_hunters
-        self.num_coordinating_hunters = N_coordinating_hunters
         self.num_preys = N_preys
         self.num_nash_q_preys = N_nash_q_preys
         self.num_minimax_q_preys = N_minimax_q_preys
+        self.num_coop_hunters = N_coop_hunters
+        self.num_coop_preys = N_coop_preys
         self.print_step_rewards = print_step_rewards
+
+        # Store cooperation strategy settings
+        self.use_formation_hunting = use_formation_hunting
+        self.use_flanking = use_flanking
+        
         self.grid = MultiGrid(width, height, torus=False)        # Kill notification system with persistent display
         self.kill_occurred_this_step = False
         self.kill_info = None  # Will store {'hunter_id': X, 'prey_id': Y, 'hunter_type': 'type', 'position': (x,y)}
@@ -98,7 +84,6 @@ class HunterPreyModel(Model):
         self._reset_kill_counters()
         
         # Initialize coordination system
-        self.coordinator = SurroundingCoordinator(self) if N_coordinating_hunters > 0 else None
         self.current_step = 0
         
         # Data collector for live counts
@@ -108,6 +93,11 @@ class HunterPreyModel(Model):
         for agent_class, count, agent_name in self._get_agent_configs():
             for _ in range(count):
                 agent = agent_class(self)
+                
+                # Special configuration for cooperative agents
+                if isinstance(agent, CooperativeHunter):
+                    agent.available_strategies = self.get_available_strategies()
+                
                 pos = self._get_collision_free_position()
                 if pos:
                     self.grid.place_agent(agent, pos)
@@ -129,17 +119,18 @@ class HunterPreyModel(Model):
             "GreedyHunters": lambda m: m.count_type(GreedyHunter),
             "NashQHunters": lambda m: m.count_type(NashQHunter),
             "MinimaxQHunters": lambda m: m.count_type(MinimaxQHunter),
-            "CoordinatingHunters": lambda m: m.count_type(CoordinatingHunter),
+            "CoopHunters": lambda m: m.count_type(CooperativeHunter),
             "Preys": lambda m: m.count_type(Prey),
             "NashQPreys": lambda m: m.count_type(NashQPrey),
             "MinimaxQPreys": lambda m: m.count_type(MinimaxQPrey),
+            "CoopPreys": lambda m: m.count_type(CooperativePrey),
             
             # Kill statistics
             "RandomHunterKills": lambda m: m.get_agent_kills(RandomHunter),
             "GreedyHunterKills": lambda m: m.get_agent_kills(GreedyHunter),
             "NashQHunterKills": lambda m: m.get_agent_kills(NashQHunter),
             "MinimaxQHunterKills": lambda m: m.get_agent_kills(MinimaxQHunter),
-            "CoordinatingHunterKills": lambda m: m.get_agent_kills(CoordinatingHunter),
+            "CoopHunterKills": lambda m: m.get_agent_kills(CooperativeHunter),
             
             # Reward statistics
             "AvgHunterReward": lambda m: m.avg_agent_reward(RandomHunter),
@@ -157,9 +148,11 @@ class HunterPreyModel(Model):
             (GreedyHunter, self.num_greedy_hunters, "GreedyHunter"),
             (NashQHunter, self.num_nash_q_hunters, "NashQHunter"),
             (MinimaxQHunter, self.num_minimax_q_hunters, "MinimaxQHunter"),
-            (CoordinatingHunter, self.num_coordinating_hunters, "CoordinatingHunter"),
-            (Prey, self.num_preys, "Prey"),            (NashQPrey, self.num_nash_q_preys, "NashQPrey"),
+            (CooperativeHunter, self.num_coop_hunters, "CooperativeHunter"),
+            (Prey, self.num_preys, "Prey"),
+            (NashQPrey, self.num_nash_q_preys, "NashQPrey"),
             (MinimaxQPrey, self.num_minimax_q_preys, "MinimaxQPrey"),
+            (CooperativePrey, self.num_coop_preys, "CooperativePrey"),
         ]
 
     def _reset_kill_counters(self):
@@ -168,23 +161,47 @@ class HunterPreyModel(Model):
         GreedyHunter.total_kills = 0
         NashQHunter.total_kills = 0
         MinimaxQHunter.total_kills = 0
-        CoordinatingHunter.total_kills = 0
+        CooperativeHunter.total_kills = 0
         
     def _get_collision_free_position(self):
-        """Get a random position that doesn't have other agents."""
+        """Get a random position that doesn't have other agents and is far from hunters."""
         # Get all possible positions
         all_positions = [(x, y) for x in range(self.grid.width) for y in range(self.grid.height)]
-        # Filter out positions that already have agents
-        available_positions = []
+         # Get hunter positions
+        hunter_positions = [agent.pos for agent in self.agents 
+                        if agent.__class__.__name__.endswith("Hunter")]
+        
+        # Filter positions: empty + at least 2 cells away from any hunter
+        safe_positions = []
         for pos in all_positions:
+            # Check if cell is empty
             cell_contents = self.grid.get_cell_list_contents([pos])
-            # Only consider truly empty cells (no agents)
-            if not cell_contents:
-                available_positions.append(pos)
-        if available_positions:
-            return self.random.choice(available_positions)
+            if cell_contents:
+                continue
+                
+            # Check distance from hunters (Manhattan distance >= 2)
+            safe_from_hunters = True
+            for hunter_pos in hunter_positions:
+                if hunter_pos:  # Make sure hunter has a position
+                    manhattan_dist = abs(pos[0] - hunter_pos[0]) + abs(pos[1] - hunter_pos[1])
+                    if manhattan_dist < 2:  # Too close to hunter
+                        safe_from_hunters = False
+                        break
+            
+            if safe_from_hunters:
+                safe_positions.append(pos)
+        
+        if safe_positions:
+            chosen_pos = self.random.choice(safe_positions)
+            logger.info(f"Respawning at safe position {chosen_pos} (distance ≥2 from hunters)")
+            return chosen_pos
         else:
-            # Fallback to any random position if no completely empty cells available
+            # Fallback: just find any empty cell
+            for pos in all_positions:
+                cell_contents = self.grid.get_cell_list_contents([pos])
+                if not cell_contents:
+                    logger.warning(f"No safe respawn positions, using emergency position {pos}")
+                    return pos
             return None
     def step(self) -> None:
         """Advance the model by one step."""
@@ -208,13 +225,19 @@ class HunterPreyModel(Model):
             
         # Execute other (non-Nash Q) agents normally
         self._execute_other_agents(other_agents)        # Final checks and cleanup
+        self._check_and_perform_hunting()
         self._finalize_step()
 
     def _process_pending_actions(self):
         """Process pending teleports and respawns from previous kills."""
+        print(f"🔧 DEBUG: START _process_pending_actions - Hunters: {len(self.pending_hunter_teleports)}, Preys: {len(self.pending_prey_respawns)}")
+        print(f"🔧 DEBUG: Hunter IDs: {[h.unique_id for h in self.pending_hunter_teleports]}")
+        print(f"🔧 DEBUG: Prey IDs: {[p.unique_id for p in self.pending_prey_respawns]}")
         try:
+            print(f"🔧 DEBUG: Processing pending actions - Hunters: {len(self.pending_hunter_teleports)}, Preys: {len(self.pending_prey_respawns)}")
             # Process pending hunter teleports
             if self.pending_hunter_teleports:
+                print(f"🔧 DEBUG: Processing {len(self.pending_hunter_teleports)} hunter teleports")
                 for hunter in list(self.pending_hunter_teleports):
                     try:
                         new_pos = self._get_collision_free_position()
@@ -226,6 +249,7 @@ class HunterPreyModel(Model):
 
             # Process pending prey respawns
             if self.pending_prey_respawns:
+                print(f"🔧 DEBUG: Processing {len(self.pending_prey_respawns)} prey respawns")
                 for prey in list(self.pending_prey_respawns):
                     try:
                         new_pos = self._get_collision_free_position()
@@ -233,10 +257,13 @@ class HunterPreyModel(Model):
                             self.grid.move_agent(prey, new_pos)
                             if hasattr(prey, '_is_dead'):
                                 prey._is_dead = False
+                            prey.scheduled_for_removal = False
                             logger.info(f"{prey.__class__.__name__} {prey.unique_id} respawned at {new_pos}")
                     except Exception as e:
                         logger.error(f"Error respawning prey {prey.unique_id}: {e}")                
                         self.pending_prey_respawns.clear()
+            else:
+                print(f"🔧 DEBUG: No prey respawns to process (list is empty)")
         except Exception as e:
             logger.error(f"Error in _process_pending_actions: {e}")
 
@@ -353,12 +380,6 @@ class HunterPreyModel(Model):
     def _finalize_step(self):
         """Final checks and cleanup for the step."""
         try:
-            # Execute coordination system step
-            if self.coordinator:
-                try:
-                    self.coordinator.step()
-                except Exception as e:
-                    logger.error(f"Error in coordinator step: {e}")
             
             # Update current step counter
             self.current_step = self.steps
@@ -477,7 +498,7 @@ class HunterPreyModel(Model):
         try:
             # Get all hunters
             hunters = [agent for agent in self.agents 
-                      if agent.__class__.__name__.endswith("Hunter")]
+                    if agent.__class__.__name__.endswith("Hunter")]
             
             for hunter in hunters:
                 try:
@@ -509,10 +530,11 @@ class HunterPreyModel(Model):
                                     if hasattr(agent, '_is_dead'):
                                         agent._is_dead = True
                                     else:
-                                        agent.scheduled_for_removal = False
+                                        agent.scheduled_for_removal = True
                                     
                                     # Schedule prey for respawn in next step
                                     self.pending_prey_respawns.append(agent)
+                                    print(f"🔧 DEBUG: Added prey {agent.unique_id} to pending_prey_respawns. List size: {len(self.pending_prey_respawns)}")
                                     
                                     # Increment kill counter for the hunter
                                     try:
@@ -522,12 +544,13 @@ class HunterPreyModel(Model):
                                     
                                     # Schedule hunter teleportation next step
                                     self.pending_hunter_teleports.append(hunter)
+                                    print(f"🔧 DEBUG: Added hunter {hunter.unique_id} to pending_hunter_teleports. List size: {len(self.pending_hunter_teleports)}")
                         except Exception as e:
                             logger.error(f"Error processing hunting for hunter {hunter.unique_id} and agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
                 except Exception as e:
                     logger.error(f"Error processing hunter {hunter.unique_id} for hunting: {e}")        
         except Exception as e:
-            logger.error(f"Error in _check_and_perform_hunting: {e}")    
+            logger.error(f"Error in _check_and_perform_hunting: {e}")
     def _calculate_nash_q_reward(self, agent, data):
         """Calculate reward for Nash Q agent and detect terminal states (kills/deaths)."""
         try:
@@ -572,28 +595,29 @@ class HunterPreyModel(Model):
                     except Exception as e:
                         logger.error(f"Error checking cell contents for prey: {e}")
                     
-                    print(f"DEBUG: Prey {agent.unique_id} reward calculation:")
-                    print(f"  - _is_dead: {is_dead}")
-                    print(f"  - hunters_in_same_cell: {len(hunters_in_same_cell)}")
-                    print(f"  - scheduled_for_removal: {getattr(agent, 'scheduled_for_removal', False)}")
-                    print(f"  - agent.pos: {agent.pos}")
-                    if hunters_in_same_cell:
+                    #print(f"DEBUG: Prey {agent.unique_id} reward calculation:")
+                    #print(f"  - _is_dead: {is_dead}")
+                    #print(f"  - hunters_in_same_cell: {len(hunters_in_same_cell)}")
+                    #print(f"  - scheduled_for_removal: {getattr(agent, 'scheduled_for_removal', False)}")
+                    #print(f"  - agent.pos: {agent.pos}")
+                    """if hunters_in_same_cell:
                         for hunter in hunters_in_same_cell:
                             print(f"  - hunter {hunter.unique_id} at {hunter.pos}")
+                    """
                     
                     # Check multiple death indicators
                     if (is_dead or 
                         getattr(agent, 'scheduled_for_removal', False) or 
                         hunters_in_same_cell):
-                        print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10) - TERMINAL STATE")
+                        #print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10) - TERMINAL STATE")
                         # Mark this as a terminal state for the prey (death)
                         data['is_terminal'] = True
                         return ModelConfig.DEATH_PENALTY  # -10
                     else:
-                        print(f"DEBUG: Prey {agent.unique_id} gets SURVIVAL_REWARD (+0.1)")
+                        #print(f"DEBUG: Prey {agent.unique_id} gets SURVIVAL_REWARD (+0.1)")
                         # Not terminal - prey survives this step
                         data['is_terminal'] = False
-                        return ModelConfig.SURVIVAL_REWARD  # +0.1
+                        return ModelConfig.SURVIVAL_REWARD  # +1
                 except Exception as e:
                     logger.error(f"Error calculating prey reward: {e}")
                     data['is_terminal'] = False
@@ -932,3 +956,12 @@ class HunterPreyModel(Model):
                     logger.error(f"Error updating exploration rate for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
         except Exception as e:
             logger.error(f"Error in _update_nash_q_exploration_rates: {e}")
+
+    def get_available_strategies(self):
+        """Get available strategies for cooperative hunters based on model settings."""
+        strategies = ["direct"]
+        if self.use_formation_hunting:
+            strategies.append("formation_hunting")
+        if self.use_flanking:
+            strategies.append("flanking")
+        return strategies

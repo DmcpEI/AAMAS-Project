@@ -9,6 +9,7 @@ Learns Q-values while assuming hunter agents act optimally to catch prey.
 import logging
 from typing import Tuple, List
 from Agents.MinimaxQAgent import MinimaxQAgent
+from Models.ModelConfig import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +43,17 @@ class MinimaxQPrey(MinimaxQAgent):
         return False
     
     def calculate_reward(self):
-        """Calculate reward based on current situation"""
-        reward = 0.1  # Small positive reward for each step survived
-        
+        """Calculate reward using updated reward structure."""
         # Check if caught by hunter
         cell_contents = self.model.grid.get_cell_list_contents([self.pos])
         hunters_in_cell = [agent for agent in cell_contents 
-                          if agent != self and agent.__class__.__name__.endswith("Hunter")]
+                        if agent != self and agent.__class__.__name__.endswith("Hunter")]
         
         if hunters_in_cell:
-            reward = -10  # Large penalty for being caught
-            logger.info(f"MinimaxQPrey {self.unique_id} was caught at {self.pos}!")
             self._is_dead = True
-        
-        return reward
+            return ModelConfig.DEATH_PENALTY  # -10
+        else:
+            return ModelConfig.SURVIVAL_REWARD  # +1.0
     
     def step(self):
         """Execute one step with learning"""
