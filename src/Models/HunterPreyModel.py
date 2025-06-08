@@ -47,6 +47,10 @@ class HunterPreyModel(Model):
         # Cooperation Strategy Parameters
         use_formation_hunting: bool = True,
         use_flanking: bool = True,
+        # Prey Cooperation Strategy Parameters
+        use_bait_and_switch: bool = False,
+        use_flocking: bool = False,
+        use_enhanced_escape: bool = False,
     ):        # Initialize base Model (sets up self.agents, RNG, etc.)
         super().__init__(seed=seed)
         logger.info(
@@ -68,6 +72,11 @@ class HunterPreyModel(Model):
         # Store cooperation strategy settings
         self.use_formation_hunting = use_formation_hunting
         self.use_flanking = use_flanking
+        
+        # Store prey cooperation strategy settings
+        self.use_bait_and_switch = use_bait_and_switch
+        self.use_flocking = use_flocking
+        self.use_enhanced_escape = use_enhanced_escape
         
         self.grid = MultiGrid(width, height, torus=False)        # Kill notification system with persistent display
         self.kill_occurred_this_step = False
@@ -101,6 +110,11 @@ class HunterPreyModel(Model):
                 # Special configuration for cooperative agents
                 if isinstance(agent, CooperativeHunter):
                     agent.available_strategies = self.get_available_strategies()
+                elif isinstance(agent, CooperativePrey):
+                    # Set prey strategy flags for the agent to access directly
+                    agent.use_bait_and_switch = self.use_bait_and_switch
+                    agent.use_flocking = self.use_flocking
+                    agent.use_enhanced_escape = self.use_enhanced_escape
                 
                 pos = self._get_collision_free_position()
                 if pos:
@@ -307,9 +321,12 @@ class HunterPreyModel(Model):
             other_agents = []
             for agent in agents_list:
                 try:
+                    # Only Nash Q-learning and Minimax Q-learning agents should use 3-phase synchronization
                     if isinstance(agent, (NashQHunter, NashQPrey, MinimaxQHunter, MinimaxQPrey)):
                         q_learn_agents.append(agent)
                     else:
+                        # All other agents (RandomHunter, GreedyHunter, CooperativeHunter, Prey, CooperativePrey)
+                        # should execute immediately without synchronization delays
                         other_agents.append(agent)
                 except Exception as e:
                     logger.error(f"Error checking agent type for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
@@ -513,9 +530,10 @@ class HunterPreyModel(Model):
     def _check_and_perform_hunting(self):
         """Check all hunter positions and perform hunting if hunters and prey are in same cell."""
         try:
-            # Get all hunters
+            # Get all hunters EXCEPT Nash Q and Minimax Q hunters (they hunt in their own specialized phases)
             hunters = [agent for agent in self.agents 
-                    if agent.__class__.__name__.endswith("Hunter")]
+                    if agent.__class__.__name__.endswith("Hunter") and 
+                    not isinstance(agent, (NashQHunter, MinimaxQHunter))]
             
             for hunter in hunters:
                 try:
@@ -542,6 +560,9 @@ class HunterPreyModel(Model):
                                     
                                     # Register kill for visualization
                                     self.register_kill(hunter, agent)
+                                    
+                                    # Increment kill counter for the hunter
+                                    hunter.increment_kills()
                                     
                                     # Set a flag to indicate the prey is scheduled for removal
                                     if hasattr(agent, '_is_dead'):
@@ -934,6 +955,11 @@ class HunterPreyModel(Model):
                             hunt_result = agent.hunt(return_reward=True)  # Get numeric reward
                             # Store immediate hunt result for reward calculation
                             data['hunt_result'] = hunt_result
+                            
+                            # If hunt was successful, handle respawn/teleport like centralized system
+                            if hunt_result > 0:
+                                self._handle_nash_q_kill_aftermath(agent)
+                                
                         except Exception as e:
                             logger.error(f"Error during hunting for agent {agent_id}: {e}")
                             # Set fallback hunt result
@@ -945,6 +971,35 @@ class HunterPreyModel(Model):
                     
         except Exception as e:
             logger.error(f"Error in _execute_nash_q_actions: {e}")
+
+    def _handle_nash_q_kill_aftermath(self, hunter):
+        """Handle respawn/teleport integration for Nash Q kills.
+        
+        This method ensures Nash Q hunters and their prey victims are added to the 
+        centralized pending system, just like the centralized hunting system does.
+        """
+        try:
+            # Find prey that was killed by this hunter (same cell, marked as dead)
+            cell_agents = self.grid.get_cell_list_contents([hunter.pos])
+            for prey in cell_agents:
+                if (prey.__class__.__name__.endswith("Prey") and 
+                    getattr(prey, '_is_dead', False)):
+                    
+                    # Add prey to pending respawn list
+                    if prey not in self.pending_prey_respawns:
+                        self.pending_prey_respawns.append(prey)
+                        print(f"🔧 DEBUG: Nash Q - Added prey {prey.unique_id} to pending_prey_respawns. List size: {len(self.pending_prey_respawns)}")
+                    
+                    # Only break after first dead prey (one kill per hunt call)
+                    break
+            
+            # Add hunter to pending teleport list
+            if hunter not in self.pending_hunter_teleports:
+                self.pending_hunter_teleports.append(hunter)
+                print(f"🔧 DEBUG: Nash Q - Added hunter {hunter.unique_id} to pending_hunter_teleports. List size: {len(self.pending_hunter_teleports)}")
+                
+        except Exception as e:
+            logger.error(f"Error in _handle_nash_q_kill_aftermath for hunter {getattr(hunter, 'unique_id', 'unknown')}: {e}")
 
     def _execute_nash_q_actions_with_hunting(self, nash_q_data):
         """Phase 2: Execute Nash Q agents' actions with integrated hunting.

@@ -1,0 +1,20 @@
+# Hunter-Prey Nash Q-Learning Simulation - Requirements
+# ====================================================
+# This file contains all dependencies required to run the multi-agent
+# hunter-prey simulation with Nash Q-Learning, Minimax algorithms,
+# and real-time web visualization.
+
+# Core Multi-Agent Framework
+mesa>=2.0.0
+
+# Web Interface and Visualization
+solara>=1.18.0
+altair>=5.0.0
+
+# Scientific Computing and Optimization
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Additional Visualization and Graph Libraries
+matplotlib>=3.7.0
+networkx>=3.0

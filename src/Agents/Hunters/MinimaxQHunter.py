@@ -74,6 +74,27 @@ class MinimaxQHunter(MinimaxQAgent):
                                  key=lambda p: self.manhattan_distance(self.pos, p))
             self._previous_prey_action = closest_prey_pos
     
+    def get_possible_actions(self, pos=None):
+        """
+        Override to ensure NO "stay" action is ever available for Minimax agents.
+        Forces movement-only behavior.
+        """
+        if pos is None:
+            pos = self.pos
+        actions = self.model.grid.get_neighborhood(pos, moore=True, include_center=False)
+        
+        # Additional safety check: remove current position if somehow it got included
+        if pos in actions:
+            actions.remove(pos)
+            
+        # If no actions available (shouldn't happen), force a random move to any adjacent cell
+        # if not actions:
+        #     # This is a fallback - get all neighbors including center, then remove center
+        #     all_neighbors = self.model.grid.get_neighborhood(pos, moore=True, include_center=True)
+        #     actions = [a for a in all_neighbors if a != pos]
+            
+        return actions
+
     def get_metrics(self):
         """Extend metrics for MinimaxQHunter"""
         metrics = super().get_metrics()

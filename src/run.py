@@ -46,6 +46,9 @@ DEFAULT_SIMULATION_PARAMS = {
 COOPERATION_STRATEGY_PARAMS = {
     "use_formation_hunting": {"type": "Checkbox", "value": True, "label": "🏹 Formation Hunting"},
     "use_flanking": {"type": "Checkbox", "value": True, "label": "🎯 Flanking Strategy"},
+    "use_bait_and_switch": {"type": "Checkbox", "value": False, "label": "🎭 Bait and Switch"},
+    "use_flocking": {"type": "Checkbox", "value": False, "label": "🐰 Flocking Behavior"},
+    "use_enhanced_escape": {"type": "Checkbox", "value": False, "label": "🏃 Enhanced Escape"},
 }
 
 def setup_logging() -> logging.Logger:
@@ -292,13 +295,14 @@ def DynamicPopChart(model):
 
 @solara.component
 def CooperationStrategies(model):
-    """Component to display cooperation strategy checkboxes when cooperative hunters are present."""
+    """Component to display cooperation strategy checkboxes when cooperative agents are present."""
     
-    # Check if cooperative hunters are present in the model
+    # Check if cooperative hunters or prey are present in the model
     n_coop_hunters = getattr(model, 'num_coop_hunters', 0)
+    n_coop_preys = getattr(model, 'num_coop_preys', 0)
     
-    # Only show if cooperative hunters are being used
-    if n_coop_hunters > 0:
+    # Only show if cooperative agents are being used
+    if n_coop_hunters > 0 or n_coop_preys > 0:
         # Title section
         title_style = {
             'background-color': '#f0f8ff',
@@ -312,30 +316,71 @@ def CooperationStrategies(model):
         with solara.VBox():
             solara.Markdown("## 🤝 Cooperation Strategies", style=title_style)
             
-            # Formation Hunting checkbox
-            def update_formation_hunting(value):
-                model.use_formation_hunting = value
-                logging.info(f"Formation hunting strategy updated: {value}")
+            # Hunter strategies section
+            if n_coop_hunters > 0:
+                solara.Markdown("### 🏹 Hunter Strategies")
+                
+                # Formation Hunting checkbox
+                def update_formation_hunting(value):
+                    model.use_formation_hunting = value
+                    logging.info(f"Formation hunting strategy updated: {value}")
+                
+                solara.Checkbox(
+                    label="🏹 Formation Hunting",
+                    value=getattr(model, 'use_formation_hunting', True),
+                    on_value=update_formation_hunting
+                )
+                
+                # Flanking Strategy checkbox  
+                def update_flanking(value):
+                    model.use_flanking = value
+                    logging.info(f"Flanking strategy updated: {value}")
+                
+                solara.Checkbox(
+                    label="🎯 Flanking Strategy",
+                    value=getattr(model, 'use_flanking', True),
+                    on_value=update_flanking
+                )
             
-            solara.Checkbox(
-                label="🏹 Formation Hunting",
-                value=getattr(model, 'use_formation_hunting', True),
-                on_value=update_formation_hunting
-            )
-            
-            # Flanking Strategy checkbox  
-            def update_flanking(value):
-                model.use_flanking = value
-                logging.info(f"Flanking strategy updated: {value}")
-            
-            solara.Checkbox(
-                label="🎯 Flanking Strategy",
-                value=getattr(model, 'use_flanking', True),
-                on_value=update_flanking
-            )
+            # Prey strategies section
+            if n_coop_preys > 0:
+                solara.Markdown("### 🐰 Prey Strategies")
+                
+                # Bait and Switch checkbox
+                def update_bait_and_switch(value):
+                    model.use_bait_and_switch = value
+                    logging.info(f"Bait and switch strategy updated: {value}")
+                
+                solara.Checkbox(
+                    label="🎭 Bait and Switch",
+                    value=getattr(model, 'use_bait_and_switch', False),
+                    on_value=update_bait_and_switch
+                )
+                
+                # Flocking Behavior checkbox
+                def update_flocking(value):
+                    model.use_flocking = value
+                    logging.info(f"Flocking behavior updated: {value}")
+                
+                solara.Checkbox(
+                    label="🐰 Flocking Behavior",
+                    value=getattr(model, 'use_flocking', False),
+                    on_value=update_flocking
+                )
+                
+                # Enhanced Escape checkbox
+                def update_enhanced_escape(value):
+                    model.use_enhanced_escape = value
+                    logging.info(f"Enhanced escape strategy updated: {value}")
+                
+                solara.Checkbox(
+                    label="🏃 Enhanced Escape",
+                    value=getattr(model, 'use_enhanced_escape', False),
+                    on_value=update_enhanced_escape
+                )
     
     else:
-        # Show empty container when no cooperative hunters
+        # Show empty container when no cooperative agents
         return solara.VBox([])
 
 def create_visualization_components():
