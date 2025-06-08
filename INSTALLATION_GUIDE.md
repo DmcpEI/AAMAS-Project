@@ -15,22 +15,14 @@ Project for the Autonomous Agents and Multi-Agent Systems course by group 10.
 cd AAMAS-Project
 ```
 
-### 2. Create Virtual Environment
-```powershell
-# Create virtual environment
-python -m venv venv
 
-# Activate virtual environment (Windows)
-venv\Scripts\activate
-```
-
-### 3. Install Dependencies
+### 2. Install Dependencies
 ```powershell
 # Install required packages
 pip install mesa solara altair networkx matplotlib scipy numpy
 ```
 
-### 4. Run the Simulation
+### 3. Run the Simulation
 ```powershell
 # Navigate to source directory
 cd src
@@ -39,7 +31,7 @@ cd src
 solara run run.py
 ```
 
-### 5. Access the Interface
+### 4. Access the Interface
 1. After running the command, you'll see output like:
    ```
    Solara server starting...
