@@ -260,8 +260,9 @@ class HunterPreyModel(Model):
                             prey.scheduled_for_removal = False
                             logger.info(f"{prey.__class__.__name__} {prey.unique_id} respawned at {new_pos}")
                     except Exception as e:
-                        logger.error(f"Error respawning prey {prey.unique_id}: {e}")                
-                        self.pending_prey_respawns.clear()
+                        logger.error(f"Error respawning prey {prey.unique_id}: {e}")
+                # Clear the list after processing all prey (successful or failed)
+                self.pending_prey_respawns.clear()
             else:
                 print(f"🔧 DEBUG: No prey respawns to process (list is empty)")
         except Exception as e:
@@ -535,12 +536,6 @@ class HunterPreyModel(Model):
                                     # Schedule prey for respawn in next step
                                     self.pending_prey_respawns.append(agent)
                                     print(f"🔧 DEBUG: Added prey {agent.unique_id} to pending_prey_respawns. List size: {len(self.pending_prey_respawns)}")
-                                    
-                                    # Increment kill counter for the hunter
-                                    try:
-                                        hunter.increment_kills()
-                                    except Exception as e:
-                                        logger.error(f"Error incrementing kills for hunter {hunter.unique_id}: {e}")
                                     
                                     # Schedule hunter teleportation next step
                                     self.pending_hunter_teleports.append(hunter)
