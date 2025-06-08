@@ -78,10 +78,14 @@ class HunterPreyModel(Model):
         self.pending_prey_respawns = []  # List of prey waiting to respawn next step        # Nash Q-Learning synchronization system (3-phase approach)
         self.nash_q_phase = ModelConfig.NASH_Q_PHASE_NORMAL  # "normal", "choose_action", "observe", or "update"
         self.nash_q_experiences = {}  # Store experiences for synchronized learning
-        
-        # Hunting tracking to prevent duplicate hunts in same step
+          # Hunting tracking to prevent duplicate hunts in same step
         self.hunted_this_step = set()  # Track (hunter_id, prey_id) pairs that already hunted this step        # Reset kill counters
         self._reset_kill_counters()
+        
+        # Distance-based reward tracking
+        self.previous_positions = {}  # Track agent positions from previous step
+        self.current_distances = {}   # Track current hunter-prey distances
+        self.previous_distances = {}  # Track previous hunter-prey distances
         
         # Initialize coordination system
         self.current_step = 0
@@ -195,17 +199,27 @@ class HunterPreyModel(Model):
             chosen_pos = self.random.choice(safe_positions)
             logger.info(f"Respawning at safe position {chosen_pos} (distance ≥2 from hunters)")
             return chosen_pos
-        else:
-            # Fallback: just find any empty cell
+        else:            # Fallback: just find any empty cell
             for pos in all_positions:
                 cell_contents = self.grid.get_cell_list_contents([pos])
                 if not cell_contents:
                     logger.warning(f"No safe respawn positions, using emergency position {pos}")
                     return pos
             return None
+    
+    def _store_previous_positions(self):
+        """Store current positions of all agents as previous positions for distance tracking."""
+        self.previous_positions = {}
+        for agent in self.agents:
+            if hasattr(agent, 'pos') and agent.pos is not None:
+                self.previous_positions[agent.unique_id] = agent.pos
+
     def step(self) -> None:
         """Advance the model by one step."""
         logger.debug(f"Model step {self.steps}")
+
+        # Store current positions as previous positions before movement
+        self._store_previous_positions()
 
         # Process pending actions from previous step
         self._process_pending_actions()
@@ -260,19 +274,21 @@ class HunterPreyModel(Model):
                             prey.scheduled_for_removal = False
                             logger.info(f"{prey.__class__.__name__} {prey.unique_id} respawned at {new_pos}")
                     except Exception as e:
-                        logger.error(f"Error respawning prey {prey.unique_id}: {e}")
-                # Clear the list after processing all prey (successful or failed)
+                        logger.error(f"Error respawning prey {prey.unique_id}: {e}")                # Clear the list after processing all prey (successful or failed)
                 self.pending_prey_respawns.clear()
             else:
                 print(f"🔧 DEBUG: No prey respawns to process (list is empty)")
         except Exception as e:
             logger.error(f"Error in _process_pending_actions: {e}")
-
+    
     def _reset_step_tracking(self):
         """Reset tracking variables for the current step."""
         self.kill_occurred_this_step = False
         self.hunted_this_step.clear()
         self.nash_q_experiences.clear()
+        # Clear distance reward cache for fresh calculation each step
+        if hasattr(self, '_distance_rewards_cache'):
+            self._distance_rewards_cache.clear()
 
     def _update_kill_notification_timer(self):
         """Update the kill notification timer."""
@@ -543,92 +559,165 @@ class HunterPreyModel(Model):
                         except Exception as e:
                             logger.error(f"Error processing hunting for hunter {hunter.unique_id} and agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
                 except Exception as e:
-                    logger.error(f"Error processing hunter {hunter.unique_id} for hunting: {e}")        
+                    logger.error(f"Error processing hunter {hunter.unique_id} for hunting: {e}")          
         except Exception as e:
             logger.error(f"Error in _check_and_perform_hunting: {e}")
+    
     def _calculate_nash_q_reward(self, agent, data):
-        """Calculate reward for Nash Q agent and detect terminal states (kills/deaths)."""
+        """Calculate distance-based reward for Nash Q agent and detect terminal states (kills/deaths)."""
         try:
+            # Check for terminal states first (kills/deaths)
             if agent.__class__.__name__.endswith("Hunter"):
-                # Hunter logic remains the same...
+                hunt_result = data.get('hunt_result', 0)
+                if hunt_result > 0:
+                    # Mark this as a terminal state for the hunter (successful kill)
+                    data['is_terminal'] = True
+                    return hunt_result  # Use actual hunt reward (usually SUCCESSFUL_HUNT_REWARD)
+                
+                # Double-check for any prey in same cell that might be dead
                 try:
-                    hunt_result = data.get('hunt_result', 0)
-                    if hunt_result > 0:
-                        # Mark this as a terminal state for the hunter (successful kill)
-                        data['is_terminal'] = True
-                        return hunt_result  # Use actual hunt reward (usually SUCCESSFUL_HUNT_REWARD)
-                    else:
-                        # Double-check for any prey in same cell that might be dead
-                        try:
-                            cell_agents = self.grid.get_cell_list_contents([agent.pos])
-                            for cell_agent in cell_agents:
-                                if (cell_agent.__class__.__name__.endswith("Prey") and 
-                                    getattr(cell_agent, '_is_dead', False)):
-                                    # Mark this as a terminal state for the hunter (successful kill)
-                                    data['is_terminal'] = True
-                                    return ModelConfig.SUCCESSFUL_HUNT_REWARD  # Successful hunt
-                        except Exception as e:
-                            logger.error(f"Error checking cell contents for hunter {getattr(agent, 'unique_id', 'unknown')}: {e}")
-                          # No catch this step - not terminal
-                        data['is_terminal'] = False
-                        return ModelConfig.MOVEMENT_COST  # Movement cost
+                    cell_agents = self.grid.get_cell_list_contents([agent.pos])
+                    for cell_agent in cell_agents:
+                        if (cell_agent.__class__.__name__.endswith("Prey") and 
+                            getattr(cell_agent, '_is_dead', False)):
+                            data['is_terminal'] = True
+                            return ModelConfig.SUCCESSFUL_HUNT_REWARD  # Successful hunt
                 except Exception as e:
-                    logger.error(f"Error calculating hunter reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
-                    data['is_terminal'] = False
-                    return ModelConfig.MOVEMENT_COST  # Fallback to movement cost
-                            
+                    logger.error(f"Error checking cell contents for hunter {getattr(agent, 'unique_id', 'unknown')}: {e}")
+                    
             elif agent.__class__.__name__.endswith("Prey"):
+                is_dead = getattr(agent, '_is_dead', False)
+                
+                # Check for hunters in same cell
+                hunters_in_same_cell = []
                 try:
-                    is_dead = getattr(agent, '_is_dead', False)
-                    
-                    # ADDITIONAL CHECK: Look for hunters in same cell
-                    hunters_in_same_cell = []
-                    try:
-                        cell_agents = self.grid.get_cell_list_contents([agent.pos])
-                        hunters_in_same_cell = [a for a in cell_agents 
-                                              if a.__class__.__name__.endswith("Hunter")]
-                    except Exception as e:
-                        logger.error(f"Error checking cell contents for prey: {e}")
-                    
-                    #print(f"DEBUG: Prey {agent.unique_id} reward calculation:")
-                    #print(f"  - _is_dead: {is_dead}")
-                    #print(f"  - hunters_in_same_cell: {len(hunters_in_same_cell)}")
-                    #print(f"  - scheduled_for_removal: {getattr(agent, 'scheduled_for_removal', False)}")
-                    #print(f"  - agent.pos: {agent.pos}")
-                    """if hunters_in_same_cell:
-                        for hunter in hunters_in_same_cell:
-                            print(f"  - hunter {hunter.unique_id} at {hunter.pos}")
-                    """
-                    
-                    # Check multiple death indicators
-                    if (is_dead or 
-                        getattr(agent, 'scheduled_for_removal', False) or 
-                        hunters_in_same_cell):
-                        #print(f"DEBUG: Prey {agent.unique_id} should get DEATH_PENALTY (-10) - TERMINAL STATE")
-                        # Mark this as a terminal state for the prey (death)
-                        data['is_terminal'] = True
-                        return ModelConfig.DEATH_PENALTY  # -10
-                    else:
-                        #print(f"DEBUG: Prey {agent.unique_id} gets SURVIVAL_REWARD (+0.1)")
-                        # Not terminal - prey survives this step
-                        data['is_terminal'] = False
-                        return ModelConfig.SURVIVAL_REWARD  # +1
+                    cell_agents = self.grid.get_cell_list_contents([agent.pos])
+                    hunters_in_same_cell = [a for a in cell_agents 
+                                          if a.__class__.__name__.endswith("Hunter")]
                 except Exception as e:
-                    logger.error(f"Error calculating prey reward: {e}")
-                    data['is_terminal'] = False
-                    return ModelConfig.SURVIVAL_REWARD
-            
-            # Default case
+                    logger.error(f"Error checking cell contents for prey: {e}")
+                
+                # Check multiple death indicators
+                if (is_dead or 
+                    getattr(agent, 'scheduled_for_removal', False) or 
+                    hunters_in_same_cell):
+                    data['is_terminal'] = True
+                    return ModelConfig.DEATH_PENALTY  # -10              # Non-terminal states: calculate distance-based rewards
             data['is_terminal'] = False
-            return 0.0
+            return self._calculate_distance_based_reward(agent, data)
+            
         except Exception as e:
             logger.error(f"Error in _calculate_nash_q_reward for agent {getattr(agent, 'unique_id', 'unknown')}: {e}")
-            # Return safe fallback based on agent type
+            # Return safe fallback
             data['is_terminal'] = False
-            if hasattr(agent, '__class__') and agent.__class__.__name__.endswith("Hunter"):
+            return 0.0
+        
+    def _calculate_distance_based_reward(self, agent, data):
+        """Calculate distance-based reward for the agent based on distance changes to opponents."""
+        try:
+            # Get this agent's previous and current positions
+            agent_pos_current = agent.pos
+            agent_pos_previous = self.previous_positions.get(agent.unique_id)
+            
+            if agent_pos_previous is None:
+                logger.debug(f"No previous position for agent {agent.unique_id}, using movement cost")
                 return ModelConfig.MOVEMENT_COST
+            
+            # Use cached reward if available
+            if hasattr(self, '_distance_rewards_cache') and agent.unique_id in self._distance_rewards_cache:
+                reward = self._distance_rewards_cache[agent.unique_id]
+                logger.debug(f"Using cached distance reward for {agent.__class__.__name__} {agent.unique_id}: {reward}")
+                return reward
+            
+            # Initialize cache if not present
+            if not hasattr(self, '_distance_rewards_cache'):
+                self._distance_rewards_cache = {}
+            
+            total_reward = 0.0
+            
+            # Determine what type of opponents this agent should consider
+            if agent.__class__.__name__.endswith("Hunter"):
+                # Hunters get rewards based on distance to prey
+                opponent_type = "Prey"
+            elif agent.__class__.__name__.endswith("Prey"):
+                # Prey get rewards based on distance to hunters
+                opponent_type = "Hunter"
             else:
-                return ModelConfig.SURVIVAL_REWARD
+                logger.warning(f"Unknown agent type for distance reward: {agent.__class__.__name__}")
+                return 0.0
+            
+            # Calculate distance changes to all opponents
+            for other_agent in self.agents:
+                if (other_agent.unique_id != agent.unique_id and 
+                    other_agent.__class__.__name__.endswith(opponent_type)):
+                    
+                    try:
+                        # Get other agent's previous and current positions
+                        other_pos_current = other_agent.pos
+                        other_pos_previous = self.previous_positions.get(other_agent.unique_id)
+                        
+                        # Skip if we don't have previous position for the other agent
+                        if other_pos_previous is None:
+                            logger.debug(f"No previous position for opponent {other_agent.unique_id}, skipping")
+                            continue
+                        
+                        # Calculate distances before and after movement
+                        distance_before = self._calculate_distance(agent_pos_previous, other_pos_previous)
+                        distance_after = self._calculate_distance(agent_pos_current, other_pos_current)
+                        
+                        # Calculate reward based on distance change
+                        if distance_after < distance_before:
+                            # Distance decreased - hunter benefits, prey suffers
+                            if agent.__class__.__name__.endswith("Hunter"):
+                                reward = ModelConfig.DISTANCE_DECREASED_REWARD_HUNTER  # +1
+                            else:  # Prey
+                                reward = ModelConfig.DISTANCE_DECREASED_PENALTY_PREY  # -1
+                        elif distance_after > distance_before:
+                            # Distance increased - hunter suffers, prey benefits
+                            if agent.__class__.__name__.endswith("Hunter"):
+                                reward = ModelConfig.DISTANCE_INCREASED_PENALTY_HUNTER  # -1
+                            else:  # Prey
+                                reward = ModelConfig.DISTANCE_INCREASED_REWARD_PREY  # +1
+                        else:
+                            # Distance stayed the same
+                            reward = 0.0
+                        
+                        total_reward += reward
+                        
+                        logger.debug(f"Distance reward for {agent.__class__.__name__} {agent.unique_id}: "
+                                   f"dist_before={distance_before:.2f}, dist_after={distance_after:.2f}, "
+                                   f"reward={reward} (vs {other_agent.__class__.__name__} {other_agent.unique_id})")
+                                   
+                    except Exception as e:
+                        logger.error(f"Error calculating distance reward between agents "
+                                   f"{agent.unique_id} and {other_agent.unique_id}: {e}")
+                        continue
+            
+            """ # Add base movement cost
+            total_reward += ModelConfig.MOVEMENT_COST """
+            
+            # Cache this agent's total reward
+            self._distance_rewards_cache[agent.unique_id] = total_reward
+                
+            logger.debug(f"Final distance reward for {agent.__class__.__name__} {agent.unique_id}: "
+                        f"{total_reward}")
+                        
+            return total_reward
+            
+        except Exception as e:
+            logger.error(f"Error in _calculate_distance_based_reward for agent "
+                        f"{getattr(agent, 'unique_id', 'unknown')}: {e}")
+            return ModelConfig.MOVEMENT_COST
+
+    def _calculate_distance(self, pos1, pos2):
+        """Calculate Manhattan distance between two positions."""
+        try:
+            if pos1 is None or pos2 is None:
+                return float('inf')
+            return max(abs(pos1[0] - pos2[0]), abs(pos1[1] - pos2[1]))
+        except Exception as e:
+            logger.error(f"Error calculating distance between {pos1} and {pos2}: {e}")
+            return float('inf')
 
     def _get_other_agents_actions(self, agent, nash_q_data):
         """Get actions of ALL other agents for Nash Q-Learning."""
