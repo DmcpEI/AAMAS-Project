@@ -18,15 +18,14 @@ class CooperativeHunter(BaseAgent):
         self.current_strategy = "direct"  # Options: "direct", "flanking", "formation"
         self.formation_role = None  # For formation hunting: "leader", "flanker", "blocker"
         self.formation_target = None  # Which prey this formation is targeting
-        
         # Available strategies - will be set by model after creation
         self.available_strategies = ["direct"]  # Default to only direct pursuit
     
     def step(self):
-        """Single step execution: share info, move and hunt."""
+        """Single step execution: share info and move."""
         self.share_prey_info()
         self.cooperative_move()
-        self.hunt()
+        # self.hunt()
     
     def share_prey_info(self):
         """Share prey locations with other cooperative hunters."""

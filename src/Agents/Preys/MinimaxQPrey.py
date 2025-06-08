@@ -101,7 +101,27 @@ class MinimaxQPrey(MinimaxQAgent):
         if new_pos:
             self.model.grid.move_agent(self, new_pos)
             logger.info(f"MinimaxQPrey {self.unique_id} respawned at {new_pos}")
-    
+    def get_possible_actions(self, pos=None):
+        """
+        Override to ensure NO "stay" action is ever available for Minimax agents.
+        Forces movement-only behavior.
+        """
+        if pos is None:
+            pos = self.pos
+        actions = self.model.grid.get_neighborhood(pos, moore=True, include_center=False)
+        
+        # Additional safety check: remove current position if somehow it got included
+        if pos in actions:
+            actions.remove(pos)
+            
+        # If no actions available (shouldn't happen), force a random move to any adjacent cell
+        # if not actions:
+        #     # This is a fallback - get all neighbors including center, then remove center
+        #     all_neighbors = self.model.grid.get_neighborhood(pos, moore=True, include_center=True)
+        #     actions = [a for a in all_neighbors if a != pos]
+            
+        return actions
+
     def get_collision_free_position(self):
         """Find a random empty position on the grid"""
         max_attempts = 100
@@ -114,7 +134,7 @@ class MinimaxQPrey(MinimaxQAgent):
         # If no empty cells found, return current position
         logger.warning(f"Could not find empty cell for MinimaxQPrey {self.unique_id}")
         return self.pos
-    
+
     def get_metrics(self):
         """Extend metrics for MinimaxQPrey"""
         metrics = super().get_metrics()

@@ -12,6 +12,6 @@ class RandomHunter(BaseAgent):
         """Single step execution: move and hunt."""
         # Move first        
         super().step()  # This calls random_move from BaseAgent
-        # Then hunt using shared method
-        self.hunt()
+        # Hunt is handled by centralized _check_and_perform_hunting() to avoid timing issues
+        # self.hunt()
 

@@ -14,8 +14,8 @@ class GreedyHunter(BaseAgent):
     def step(self):
         """Single step execution: move and hunt."""
         self.greedy_move()        
-        # Hunt after moving using shared method
-        self.hunt()
+        # Hunt is handled by centralized _check_and_perform_hunting() to avoid timing issues
+        # self.hunt()
 
     def find_closest_prey(self):
         preys = [agent for agent in self.model.agents if isinstance(agent, Prey) or agent.__class__.__name__.endswith("Prey")]

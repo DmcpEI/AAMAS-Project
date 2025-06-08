@@ -87,7 +87,9 @@ class MinimaxQAgent(BaseAgent, ABC):
         """
         possible_actions = self.get_possible_actions()
         if not possible_actions:
-            return self.pos
+            # No valid actions available - this should not happen in a well-designed environment
+            # For Minimax agents, we should never allow staying in place when include_center=False
+            raise RuntimeError(f"No valid actions available for {self.__class__.__name__} at position {self.pos}")
         
         # Epsilon-greedy exploration
         if self.random.random() < self.epsilon:
@@ -141,7 +143,12 @@ class MinimaxQAgent(BaseAgent, ABC):
         
         # For simplicity, assume single opponent
         other_pos = other_positions[0]
-        other_actions = self.get_possible_actions(other_pos)
+        # Get opponent actions using the same movement constraints (no stay action)
+        other_actions = self.model.grid.get_neighborhood(other_pos, moore=True, include_center=False)
+        
+        # Additional safety check: ensure no stay actions for opponent
+        if other_pos in other_actions:
+            other_actions.remove(other_pos)
         
         if not other_actions:
             # No opponent actions, choose greedily

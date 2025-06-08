@@ -49,16 +49,12 @@ class NashQHunter(NashQAgent):
         if action and action != self.pos:
             self.model.grid.move_agent(self, action)
         
-        # Hunt immediately after moving
-        hunt_result = self.hunt(return_reward=True)
+        # Hunt is handled by centralized _check_and_perform_hunting() to avoid timing issues
+        # hunt_result = self.hunt(return_reward=True)
         
-        # Calculate and print immediate reward feedback
-        if hunt_result > 0:
-            reward = hunt_result  # Successful hunt
-            print(f" Hunter {self.unique_id}: Moved {old_pos}→{self.pos}, CAUGHT PREY! Reward: +{reward:.1f}")
-        else:
-            reward = -0.1  # Movement cost
-            print(f" Hunter {self.unique_id}: Moved {old_pos}→{self.pos}, Reward: {reward:.1f}")
+        # For now, just calculate movement cost as reward since hunting is centralized
+        reward = -0.1  # Movement cost
+        print(f" Hunter {self.unique_id}: Moved {old_pos}→{self.pos}, Reward: {reward:.1f} (hunt handled centrally)")
         
         # Store reward for model's reward system
         self._step_reward = reward
